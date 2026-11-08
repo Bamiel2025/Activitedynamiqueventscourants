@@ -1,0 +1,2066 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVT Cycle 4 — Dynamique des Masses d'Air et des Masses d'Eau</title>
+    <!-- Tailwind CSS pour un rendu soigné et moderne -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Configuration et sécurité Google Sheets -->
+    <script src="config.example.js"></script>
+    <script src="config.local.js" onerror="console.info('Mode public : config.local.js non détecté.')"></script>
+    <style>
+        :root {
+            --bg-main: #0b1324;
+            --panel-bg: rgba(15, 23, 42, 0.94);
+            --accent-amber: #f59e0b;
+            --accent-blue: #38bdf8;
+            --accent-emerald: #10b981;
+            --accent-red: #ef4444;
+            --border-col: #334155;
+        }
+        body {
+            background-color: var(--bg-main);
+            color: #f1f5f9;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+        }
+        /* Style des étiquettes 3D */
+        #labels-container {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: 10;
+        }
+        .label-3d {
+            position: absolute;
+            background: rgba(15, 23, 42, 0.92);
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border: 1px solid #64748b;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            transition: opacity 0.2s;
+        }
+        .label-3d.hot { border-color: var(--accent-red); color: #fca5a5; }
+        .label-3d.cold { border-color: var(--accent-blue); color: #bae6fd; }
+
+        /* Comparateur Swipe interactif avant/après Dust */
+        .swipe-stage {
+            position: relative;
+            width: 100%;
+            height: 340px;
+            overflow: hidden;
+            border-radius: 12px;
+            border: 1px solid var(--border-col);
+            cursor: ew-resize;
+            user-select: none;
+            touch-action: none;
+            background: #071124;
+        }
+        .swipe-img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .swipe-clipper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 50%;
+            overflow: hidden;
+            border-right: 3px solid #fde047;
+            box-shadow: 2px 0 12px rgba(0,0,0,0.7);
+        }
+        .swipe-clipper img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 100%;
+            object-fit: cover;
+            max-width: none;
+        }
+        .swipe-handle {
+            position: absolute;
+            top: 50%;
+            right: 0;
+            transform: translate(50%, -50%);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #fde047;
+            color: #0f172a;
+            font-size: 18px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.7);
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        /* Personnalisation ascenseurs */
+        ::-webkit-scrollbar { width: 7px; height: 7px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        /* Grille critériée */
+        .crit-ok { color: #4ade80; font-weight: 600; }
+        .crit-ko { color: #f87171; }
+    </style>
+</head>
+<body class="flex flex-col h-screen select-none">
+
+    <!-- BARRE D'EN-TÊTE PRINCIPALE -->
+    <header class="bg-slate-900 border-b border-slate-800 px-4 py-2.5 flex flex-wrap justify-between items-center gap-3 z-30 shadow-md">
+        <!-- Logo & Identité thématique -->
+        <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">🌍</span>
+                <div>
+                    <h1 class="text-sm font-bold tracking-tight text-white flex items-center gap-2">
+                        <span>SVT Cycle 4</span>
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 font-semibold">Démarche d'investigation</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">Dynamique des masses d'air et masses d'eau</p>
+                </div>
+            </div>
+
+            <!-- Switcher Activité Air / Activité Eau -->
+            <div class="bg-slate-950 p-1 rounded-xl border border-slate-800 flex items-center ml-2">
+                <button id="btn-theme-air" onclick="switchTheme('air')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-amber-500 text-slate-950 shadow-sm">
+                    <span>💨</span>
+                    <span>Masses d'Air (Dust)</span>
+                </button>
+                <button id="btn-theme-eau" onclick="switchTheme('eau')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition-all">
+                    <span>🌊</span>
+                    <span>Masses d'Eau (Henderson)</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Fiche élève : Classe, Nom, Prénom -->
+        <div class="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800">
+            <span class="text-xs font-semibold text-slate-400">Élève :</span>
+            <input type="text" id="st-nom" placeholder="NOM" class="w-24 bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs text-white uppercase focus:outline-none focus:border-amber-400">
+            <input type="text" id="st-prenom" placeholder="Prénom" class="w-24 bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs text-white capitalize focus:outline-none focus:border-amber-400">
+            <select id="st-classe" class="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-400">
+                <option value="">Classe...</option>
+                <option value="4eme1">4ème 1</option>
+                <option value="4eme2">4ème 2</option>
+                <option value="4eme3">4ème 3</option>
+                <option value="4eme4">4ème 4</option>
+                <option value="4eme5">4ème 5</option>
+                <option value="4eme6">4ème 6</option>
+                <option value="4eme7">4ème 7</option>
+            </select>
+        </div>
+
+        <!-- Onglets des 5 étapes pédagogiques -->
+        <nav class="flex items-center gap-1.5 bg-slate-950/70 p-1 rounded-xl border border-slate-800">
+            <button onclick="setStep(1)" id="tab-step-1" class="step-tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-amber-500 text-slate-950 font-bold">1. Situation déclenchante</button>
+            <button onclick="setStep(2)" id="tab-step-2" class="step-tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white transition-all">2. Modèle 1</button>
+            <button onclick="setStep(3)" id="tab-step-3" class="step-tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white transition-all">3. Modèle 2</button>
+            <button onclick="setStep(4)" id="tab-step-4" class="step-tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white transition-all">4. Comprendre le réel</button>
+            <button onclick="setStep(5)" id="tab-step-5" class="step-tab-btn px-3 py-1.5 rounded-lg text-xs font-bold text-sky-400 border border-sky-500/30 hover:bg-sky-500/10 transition-all">🔒 5. Bilan &amp; Envoi</button>
+        </nav>
+    </header>
+
+    <!-- ZONE DE TRAVAIL CENTRALE -->
+    <main id="main-container" class="relative flex-1 w-full h-full overflow-hidden bg-slate-950">
+        
+        <!-- Scène 3D Three.js (Modèles 1 & 2) -->
+        <div id="canvas-container" class="w-full h-full block"></div>
+        <div id="labels-container"></div>
+
+        <!-- ========================================================================= -->
+        <!-- SOUS-PANNEAUX DE CONTRÔLE 3D (ÉTAPE 2 & 3 - FLOTTANTS À GAUCHE)            -->
+        <!-- ========================================================================= -->
+
+        <!-- Modèle Air 1 : Blocs ambiant & congelé -->
+        <div id="panel-ctrl-air-mod1" class="hidden absolute top-4 left-4 w-80 bg-slate-900/95 backdrop-blur-md p-4 rounded-2xl border border-slate-700 shadow-2xl z-20">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold uppercase tracking-wider text-amber-400">Modèle 3D 1</span>
+                <span class="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded">Masses d'air</span>
+            </div>
+            <h2 class="text-sm font-bold text-white mb-1.5">Bloc ambiant vs Bloc congelé</h2>
+            <p class="text-xs text-slate-300 border-l-2 border-amber-500 pl-2 mb-3 leading-relaxed">
+                On observe le déplacement de la fumée d'encens pour modéliser le comportement vertical d'une masse d'air chaud et d'une masse d'air froid.
+            </p>
+            <div class="grid grid-cols-3 gap-1.5">
+                <button onclick="setAirBlockFilter('both')" class="px-2 py-1.5 bg-amber-500 text-slate-950 font-bold rounded-lg text-xs hover:bg-amber-400 transition">👁️ Les deux</button>
+                <button onclick="setAirBlockFilter('ambient')" class="px-2 py-1.5 bg-slate-800 text-slate-200 border border-slate-700 font-semibold rounded-lg text-xs hover:bg-slate-700 transition">🌡️ Ambiant</button>
+                <button onclick="setAirBlockFilter('frozen')" class="px-2 py-1.5 bg-slate-800 text-sky-300 border border-slate-700 font-semibold rounded-lg text-xs hover:bg-slate-700 transition">❄️ Congelé</button>
+            </div>
+        </div>
+
+        <!-- Modèle Air 2 : Boîte à vent (convection) -->
+        <div id="panel-ctrl-air-mod2" class="hidden absolute top-4 left-4 w-80 bg-slate-900/95 backdrop-blur-md p-4 rounded-2xl border border-slate-700 shadow-2xl z-20">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold uppercase tracking-wider text-amber-400">Modèle 3D 2</span>
+                <span class="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded">Convection</span>
+            </div>
+            <h2 class="text-sm font-bold text-white mb-1.5">Boîte à vent &amp; Naissance du vent</h2>
+            <p class="text-xs text-slate-300 border-l-2 border-amber-500 pl-2 mb-3 leading-relaxed">
+                Allumez la bougie pour chauffer l'air sous la cheminée gauche et observez la mise en mouvement de l'air froid entrant à droite.
+            </p>
+            <div class="flex gap-2">
+                <button onclick="toggleAirCandle(true)" class="flex-1 py-2 bg-amber-500 text-slate-950 font-bold rounded-lg text-xs hover:bg-amber-400 transition">🕯️ Allumer la bougie</button>
+                <button onclick="toggleAirCandle(false)" class="px-3 py-2 bg-slate-800 text-slate-300 border border-slate-700 font-semibold rounded-lg text-xs hover:bg-slate-700 transition">🔄 Éteindre</button>
+            </div>
+        </div>
+
+        <!-- Modèle Eau 1 : Cristallisoir / Courants de surface -->
+        <div id="panel-ctrl-eau-mod1" class="hidden absolute top-4 left-4 w-80 bg-slate-900/95 backdrop-blur-md p-4 rounded-2xl border border-slate-700 shadow-2xl z-20">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold uppercase tracking-wider text-sky-400">Modèle 3D 1</span>
+                <span class="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded">Surface</span>
+            </div>
+            <h2 class="text-sm font-bold text-white mb-1.5">Action du vent sur l'eau de surface</h2>
+            <p class="text-xs text-slate-300 border-l-2 border-sky-500 pl-2 mb-3 leading-relaxed">
+                On souffle avec la paille au-dessus d'une goutte de colorant pour modéliser l'action des vents dominants sur la nappe d'eau.
+            </p>
+            <div class="mb-3">
+                <div class="flex justify-between text-xs font-semibold mb-1 text-slate-300">
+                    <span>Intensité du souffle :</span>
+                    <span id="wind-val" class="text-sky-400 font-bold">0 %</span>
+                </div>
+                <input type="range" id="wind-slider" min="0" max="100" value="0" oninput="updateEauWind(this.value)" class="w-full accent-sky-400 cursor-pointer">
+            </div>
+            <div class="flex gap-2">
+                <button onclick="updateEauWind(80); document.getElementById('wind-slider').value=80;" class="flex-1 py-2 bg-sky-500 text-slate-950 font-bold rounded-lg text-xs hover:bg-sky-400 transition">💨 Souffler fort</button>
+                <button onclick="resetEauHorizontal()" class="px-3 py-2 bg-slate-800 text-slate-300 border border-slate-700 font-semibold rounded-lg text-xs hover:bg-slate-700 transition">🔄 Zéro</button>
+            </div>
+        </div>
+
+        <!-- Modèle Eau 2 : Colonnes thermiques / Courants profonds -->
+        <div id="panel-ctrl-eau-mod2" class="hidden absolute top-4 left-4 w-80 bg-slate-900/95 backdrop-blur-md p-4 rounded-2xl border border-slate-700 shadow-2xl z-20">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold uppercase tracking-wider text-sky-400">Modèle 3D 2</span>
+                <span class="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded">Circulation profonde</span>
+            </div>
+            <h2 class="text-sm font-bold text-white mb-1.5">Échanges eau chaude / eau froide</h2>
+            <p class="text-xs text-slate-300 border-l-2 border-sky-500 pl-2 mb-3 leading-relaxed">
+                Ouvrez les vannes reliant la colonne d'eau chaude (rouge) et la colonne d'eau froide (bleue) pour observer le sens des flux verticaux.
+            </p>
+            <div class="flex gap-2">
+                <button onclick="startEauVerticalExchange()" class="flex-1 py-2 bg-sky-500 text-slate-950 font-bold rounded-lg text-xs hover:bg-sky-400 transition">🔓 Ouvrir les tubes</button>
+                <button onclick="resetEauVertical()" class="px-3 py-2 bg-slate-800 text-slate-300 border border-slate-700 font-semibold rounded-lg text-xs hover:bg-slate-700 transition">🔄 Réinitialiser</button>
+            </div>
+        </div>
+
+        <!-- ========================================================================= -->
+        <!-- PANNEAUX DE QUESTIONNEMENT ÉLÈVE (ÉTAPE 2 & 3 - FLOTTANTS À DROITE)        -->
+        <!-- ========================================================================= -->
+
+        <!-- Question Air 1 (Étape 2) -->
+        <div id="qpanel-air-mod1" class="hidden absolute top-4 right-4 w-96 max-h-[calc(100vh-100px)] overflow-y-auto bg-slate-900/95 backdrop-blur-md p-5 rounded-2xl border border-slate-700 shadow-2xl z-20">
+            <span class="inline-block px-2.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30 text-xs font-bold mb-2">Compétences D4 &amp; D1</span>
+            <h3 class="text-sm font-bold text-white mb-2">Question 1 : Déplacement vertical de l'air</h3>
+            <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                En observant la fumée sous le <strong>bloc à température ambiante</strong> et sous le <strong>bloc congelé</strong>, décrivez les résultats puis <strong>concluez sur le déplacement</strong> d'une masse d'air chaud et d'une masse d'air froid en vous appuyant sur la <strong>densité</strong>.
+            </p>
+            <div class="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800 text-[11px] text-slate-400 mb-3 leading-normal">
+                💡 <strong>Attendus :</strong> Précisez dans quel cas la fumée monte ou descend, et expliquez le phénomène avec la notion de densité de l'air.
+            </div>
+            <textarea id="ans-air-q1" class="w-full min-h-[110px] bg-slate-950 text-slate-100 p-2.5 rounded-xl border border-slate-700 text-xs leading-relaxed focus:outline-none focus:border-amber-400" placeholder="Rédigez votre observation et votre conclusion scientifique ici..."></textarea>
+            <div id="corr-ans-air-q1" class="correction-box hidden mt-2.5 p-3 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-xs text-emerald-200 leading-relaxed shadow-lg">
+                <strong>✅ Corrigé attendu :</strong> Sous le bloc ambiant (tempéré), l'air se réchauffe et monte en entraînant la fumée. Sous le bloc congelé (froid), l'air refroidi devient plus dense et redescend vers le bas. <em>Conclusion :</em> L'<strong>air chaud est moins dense</strong> et s'élève (mouvement ascendant), tandis que l'<strong>air froid est plus dense</strong> et plonge vers le sol (subsidence).
+            </div>
+            <button onclick="setStep(3)" class="w-full mt-3 py-2.5 bg-amber-500 text-slate-950 font-bold rounded-xl text-xs hover:bg-amber-400 transition flex items-center justify-center gap-1.5">
+                <span>Passer au Modèle 2 : La boîte à vent</span>
+                <span>➔</span>
+            </button>
+        </div>
+
+        <!-- Question Air 2 (Étape 3) -->
+        <div id="qpanel-air-mod2" class="hidden absolute top-4 right-4 w-96 max-h-[calc(100vh-100px)] overflow-y-auto bg-slate-900/95 backdrop-blur-md p-5 rounded-2xl border border-slate-700 shadow-2xl z-20">
+            <span class="inline-block px-2.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30 text-xs font-bold mb-2">Compétences D4 &amp; D1</span>
+            <h3 class="text-sm font-bold text-white mb-2">Question 2 : Naissance du vent &amp; Pressions</h3>
+            <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                Lorsque la bougie est allumée, décrivez le <strong>trajet de l'air chaud et de l'air froid</strong>, puis expliquez comment se forme le <strong>vent</strong> entre les zones de haute et de basse pression.
+            </p>
+            <div class="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800 text-[11px] text-slate-400 mb-3 leading-normal">
+                🔬 <strong>Mots-clés :</strong> Bougie, Basse pression (air ascendant), Haute pression (air froid descendant), Sens du vent horizontal.
+            </div>
+            <textarea id="ans-air-q2" class="w-full min-h-[110px] bg-slate-950 text-slate-100 p-2.5 rounded-xl border border-slate-700 text-xs leading-relaxed focus:outline-none focus:border-amber-400" placeholder="Décrivez les mouvements d'air observés, les zones de pression et le sens du vent..."></textarea>
+            <div id="corr-ans-air-q2" class="correction-box hidden mt-2.5 p-3 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-xs text-emerald-200 leading-relaxed shadow-lg">
+                <strong>✅ Corrigé attendu :</strong> Au-dessus de la bougie, l'air chaud s'élève et crée une zone de <strong>Basse Pression</strong> (dépression). L'air froid descend par l'autre cheminée et crée une zone de <strong>Haute Pression</strong> (anticyclone). Le vent horizontal au sol souffle toujours de la <strong>Haute Pression vers la Basse Pression</strong>.
+            </div>
+            <button onclick="setStep(4)" class="w-full mt-3 py-2.5 bg-amber-500 text-slate-950 font-bold rounded-xl text-xs hover:bg-amber-400 transition flex items-center justify-center gap-1.5">
+                <span>Passer à l'Étape 4 : Comprendre le réel</span>
+                <span>➔</span>
+            </button>
+        </div>
+
+        <!-- Question Eau 1 (Étape 2) -->
+        <div id="qpanel-eau-mod1" class="hidden absolute top-4 right-4 w-96 max-h-[calc(100vh-100px)] overflow-y-auto bg-slate-900/95 backdrop-blur-md p-5 rounded-2xl border border-slate-700 shadow-2xl z-20">
+            <span class="inline-block px-2.5 py-0.5 rounded bg-sky-500/10 text-sky-300 border border-sky-500/30 text-xs font-bold mb-2">Compétences D4 &amp; D1</span>
+            <h3 class="text-sm font-bold text-white mb-2">Question 1 : Les courants océaniques de surface</h3>
+            <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                À partir du modèle 3D du cristallisoir, décrivez le résultat observé (déplacement de l'eau et du colorant vert), puis expliquez <strong>ce qui met en mouvement les courants océaniques de surface</strong> à l'échelle de la planète.
+            </p>
+            <div class="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800 text-[11px] text-slate-400 mb-3 leading-normal">
+                💡 <strong>Attendus :</strong> Reliez le souffle de la paille aux vents dominants de surface et aux différences de pression.
+            </div>
+            <textarea id="ans-eau-q1" class="w-full min-h-[110px] bg-slate-950 text-slate-100 p-2.5 rounded-xl border border-slate-700 text-xs leading-relaxed focus:outline-none focus:border-sky-400" placeholder="Décrivez l'effet du souffle sur le colorant et expliquez l'origine des courants océaniques de surface..."></textarea>
+            <div id="corr-ans-eau-q1" class="correction-box hidden mt-2.5 p-3 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-xs text-emerald-200 leading-relaxed shadow-lg">
+                <strong>✅ Corrigé attendu :</strong> Quand on souffle à la surface avec la paille, l'eau et le colorant vert se déplacent en surface vers la droite, puis se dispersent sur les côtés en heurtant la paroi du fond. À l'échelle du globe, ce sont les <strong>vents dominants</strong> qui frottent sur l'eau et mettent en mouvement les <strong>courants marins de surface</strong>.
+            </div>
+            <button onclick="setStep(3)" class="w-full mt-3 py-2.5 bg-sky-500 text-slate-950 font-bold rounded-xl text-xs hover:bg-sky-400 transition flex items-center justify-center gap-1.5">
+                <span>Passer au Modèle 2 : Les courants profonds</span>
+                <span>➔</span>
+            </button>
+        </div>
+
+        <!-- Question Eau 2 (Étape 3) -->
+        <div id="qpanel-eau-mod2" class="hidden absolute top-4 right-4 w-96 max-h-[calc(100vh-100px)] overflow-y-auto bg-slate-900/95 backdrop-blur-md p-5 rounded-2xl border border-slate-700 shadow-2xl z-20">
+            <span class="inline-block px-2.5 py-0.5 rounded bg-sky-500/10 text-sky-300 border border-sky-500/30 text-xs font-bold mb-2">Compétences D4 &amp; D1</span>
+            <h3 class="text-sm font-bold text-white mb-2">Question 2 : Les courants marins verticaux</h3>
+            <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                Après l'ouverture des tubes reliant les deux colonnes, décrivez le trajet de l'<strong>eau chaude (rouge)</strong> et de l'<strong>eau froide (bleue)</strong>, puis expliquez ce résultat à l'aide de la notion de <strong>densité</strong>.
+            </p>
+            <div class="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800 text-[11px] text-slate-400 mb-3 leading-normal">
+                💡 <strong>Attendus :</strong> Expliquez clairement pourquoi l'eau froide plonge en bas et l'eau chaude circule en haut.
+            </div>
+            <textarea id="ans-eau-q2" class="w-full min-h-[110px] bg-slate-950 text-slate-100 p-2.5 rounded-xl border border-slate-700 text-xs leading-relaxed focus:outline-none focus:border-sky-400" placeholder="Décrivez la circulation de l'eau chaude et de l'eau froide et expliquez le rôle de la densité..."></textarea>
+            <div id="corr-ans-eau-q2" class="correction-box hidden mt-2.5 p-3 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-xs text-emerald-200 leading-relaxed shadow-lg">
+                <strong>✅ Corrigé attendu :</strong> L'<strong>eau chaude rouge</strong> circule par le tube supérieur en surface car elle est <strong>moins dense</strong>. L'<strong>eau froide bleue</strong> plonge et circule par le tube inférieur au fond car elle est <strong>plus dense</strong>. Cette différence de température et de densité est le moteur des courants océaniques profonds (circulation thermohaline).
+            </div>
+            <button onclick="setStep(4)" class="w-full mt-3 py-2.5 bg-sky-500 text-slate-950 font-bold rounded-xl text-xs hover:bg-sky-400 transition flex items-center justify-center gap-1.5">
+                <span>Passer à l'Étape 4 : Comprendre le réel</span>
+                <span>➔</span>
+            </button>
+        </div>
+
+        <!-- ========================================================================= -->
+        <!-- VUES PLEIN ÉCRAN : ÉTAPE 1 (SITUATION DÉCLENCHANTE)                       -->
+        <!-- ========================================================================= -->
+
+        <!-- Étape 1 : Masses d'Air (Situation déclenchante : Dust Septembre 2023 avec swipe) -->
+        <div id="view-step1-air" class="hidden absolute inset-0 overflow-y-auto p-6 z-20 bg-slate-950">
+            <div class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+                
+                <!-- Colonne gauche : Comparateur satellite réel Dust -->
+                <div class="md:col-span-7 bg-slate-900/90 p-5 rounded-2xl border border-slate-800 shadow-xl">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-bold px-2.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30">Donnée satellite MODIS Terra</span>
+                        <span class="text-xs text-slate-400">France &amp; Sahara (Septembre 2023)</span>
+                    </div>
+                    <h2 class="text-base font-bold text-white mb-2">🛰️ Panache de poussières de sable du Sahara (« Dust ») et canicule tardive</h2>
+                    
+                    <!-- Swipe interactif Dust avant / après -->
+                    <div class="swipe-stage" id="dust-stage" tabindex="0">
+                        <!-- Image après (avec Dust 8 septembre 2023) -->
+                        <img src="dust-2023-09-08.jpg" alt="Satellite MODIS 8 septembre 2023 avec panache de sable" class="swipe-img">
+                        <!-- Clipper avant (ciel clair 4 septembre 2023) -->
+                        <div class="swipe-clipper" id="dust-clipper">
+                            <img src="dust-2023-09-04.jpg" alt="Satellite MODIS 4 septembre 2023 avant la remontée" id="dust-before-img">
+                            <div class="swipe-handle">↔</div>
+                        </div>
+                        <div class="absolute top-2.5 left-2.5 px-2.5 py-1 rounded bg-slate-950/80 text-[11px] font-semibold text-slate-200 border border-slate-700 pointer-events-none">
+                            4 Sept. 2023 (Avant)
+                        </div>
+                        <div class="absolute top-2.5 right-2.5 px-2.5 py-1 rounded bg-slate-950/80 text-[11px] font-semibold text-amber-300 border border-amber-500/50 pointer-events-none">
+                            8 Sept. 2023 (Dust sur la France)
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-slate-400 text-center mt-2">
+                        👉 <em>Faites glisser la barre jaune de gauche à droite sur l'image pour comparer le ciel avant et après l'arrivée du sable saharien.</em>
+                    </p>
+
+                    <div class="mt-4 p-3.5 bg-slate-950/70 rounded-xl border border-slate-800 text-xs text-slate-300 leading-relaxed">
+                        <strong>Constat météorologique :</strong> En septembre 2023, la France subit une <strong>vague de chaleur tardive historique</strong> (plus de 35 °C mesurés). Simultanément, les satellites révèlent un immense panache ocre de <strong>poussières de sable du Sahara (« dust »)</strong> traversant la Méditerranée et recouvrant le ciel français.
+                    </div>
+                </div>
+
+                <!-- Colonne droite : Problème et Hypothèse -->
+                <div class="md:col-span-5 bg-slate-900/90 p-5 rounded-2xl border border-slate-800 shadow-xl">
+                    <span class="inline-block px-2.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30 text-xs font-bold mb-2">Compétence D4 • Démarche scientifique</span>
+                    <h2 class="text-base font-bold text-white mb-2">❓ Problème &amp; Hypothèse</h2>
+                    <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                        En reliant l'image satellite du panache de sable et la météo caniculaire en France, formulez le <strong>problème scientifique</strong> puis proposez une <strong>hypothèse</strong>.
+                    </p>
+
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">1. Formuler le problème scientifique :</label>
+                            <textarea id="ans-air-prob" class="w-full min-h-[65px] bg-slate-950 text-slate-100 p-2.5 rounded-xl border border-slate-700 text-xs focus:outline-none focus:border-amber-400" placeholder="Formulez le problème scientifique sous la forme d'une question..."></textarea>
+                            <div id="corr-ans-air-prob" class="correction-box hidden mt-1.5 p-2.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-xs text-emerald-200 shadow-md">
+                                <strong>✅ Corrigé attendu :</strong> Comment expliquer l'origine de cette vague de chaleur tardive en septembre 2023 en France et la présence de poussières de sable du Sahara ?
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">2. Proposer une hypothèse explicative :</label>
+                            <textarea id="ans-air-hyp" class="w-full min-h-[65px] bg-slate-950 text-slate-100 p-2.5 rounded-xl border border-slate-700 text-xs focus:outline-none focus:border-amber-400" placeholder="Formulez une hypothèse explicative..."></textarea>
+                            <div id="corr-ans-air-hyp" class="correction-box hidden mt-1.5 p-2.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-xs text-emerald-200 shadow-md">
+                                <strong>✅ Corrigé attendu :</strong> On peut penser qu'un flux atmosphérique d'air chaud venant du sud (visualisé par le sable transporté) est à l'origine de cette canicule en France.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 pt-3 border-t border-slate-800">
+                        <button onclick="setStep(2)" class="w-full py-2.5 bg-amber-500 text-slate-950 font-bold rounded-xl text-xs hover:bg-amber-400 transition flex items-center justify-center gap-1.5 shadow-md">
+                            <span>Passer aux modèles 3D pour tester l'hypothèse</span>
+                            <span>➔</span>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Étape 1 : Masses d'Eau (Situation déclenchante : Déchets et Localisation Île Henderson réels) -->
+        <div id="view-step1-eau" class="hidden absolute inset-0 overflow-y-auto p-6 z-20 bg-slate-950">
+            <div class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+                
+                <!-- Colonne gauche : Vraies photos de l'île Henderson -->
+                <div class="md:col-span-7 bg-slate-900/90 p-5 rounded-2xl border border-slate-800 shadow-xl">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-bold px-2.5 py-0.5 rounded bg-sky-500/10 text-sky-300 border border-sky-500/30">Documents scientifiques réels</span>
+                        <span class="text-xs text-slate-400">Pacifique Sud • Atoll inhabité</span>
+                    </div>
+                    <h2 class="text-base font-bold text-white mb-3">🏝️ Le mystère des déchets plastiques de l'île Henderson</h2>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                        <!-- Photo 1 : Déchets plastiques sur la plage -->
+                        <div class="bg-slate-950 rounded-xl overflow-hidden border border-slate-800 flex flex-col group transition hover:border-sky-500/50">
+                            <div class="relative cursor-pointer overflow-hidden" onclick="openHendersonFullscreen(0)">
+                                <img src="dechets plage henderson.png" alt="Plage de l'île Henderson recouverte de déchets plastiques" class="w-full h-44 object-cover transition-transform duration-300 group-hover:scale-105">
+                                <span class="absolute top-2 right-2 px-2 py-1 bg-slate-950/80 hover:bg-sky-600 text-[11px] text-white font-semibold rounded-md border border-slate-700 flex items-center gap-1 shadow-md">
+                                    ⛶ Plein écran
+                                </span>
+                            </div>
+                            <div class="p-2.5 text-[11px] text-slate-300 leading-tight flex-1 flex flex-col justify-between">
+                                <div>📸 <strong>Plage d'Henderson :</strong> Plus de 17 tonnes (38 millions) de débris plastiques échoués.</div>
+                                <button type="button" onclick="openHendersonFullscreen(0)" class="mt-2 w-full py-1.5 px-2 bg-slate-900 hover:bg-sky-600 text-sky-300 hover:text-white rounded-lg text-xs font-semibold border border-slate-700/80 flex items-center justify-center gap-1.5 transition">
+                                    <span>🔍 Voir en plein écran HD</span>
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Photo 2 : Carte de localisation et isolement 5 000 km -->
+                        <div class="bg-slate-950 rounded-xl overflow-hidden border border-slate-800 flex flex-col group transition hover:border-sky-500/50">
+                            <div class="relative cursor-pointer overflow-hidden" onclick="openHendersonFullscreen(1)">
+                                <img src="localisation ile henderson.jpg" alt="Carte de localisation de l'île Henderson à 5000 km des côtes" class="w-full h-44 object-cover transition-transform duration-300 group-hover:scale-105">
+                                <span class="absolute top-2 right-2 px-2 py-1 bg-slate-950/80 hover:bg-sky-600 text-[11px] text-white font-semibold rounded-md border border-slate-700 flex items-center gap-1 shadow-md">
+                                    ⛶ Plein écran
+                                </span>
+                            </div>
+                            <div class="p-2.5 text-[11px] text-slate-300 leading-tight flex-1 flex flex-col justify-between">
+                                <div>📍 <strong>Isolement extrême :</strong> Située à plus de 5 000 km de tout continent habité.</div>
+                                <button type="button" onclick="openHendersonFullscreen(1)" class="mt-2 w-full py-1.5 px-2 bg-slate-900 hover:bg-sky-600 text-sky-300 hover:text-white rounded-lg text-xs font-semibold border border-slate-700/80 flex items-center justify-center gap-1.5 transition">
+                                    <span>🔍 Voir en plein écran HD</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800 text-xs text-slate-300 leading-relaxed">
+                        <strong>Constat écologique :</strong> L'île Henderson est un atoll corallien strictement <strong>inhabité</strong> au cœur du Pacifique Sud. Pourtant, ses plages possèdent la plus forte densité de pollution plastique au monde, provenant d'Amérique du Sud, d'Asie et de navires de pêche lointains.
+                    </div>
+                </div>
+
+                <!-- Colonne droite : Problème et Hypothèse -->
+                <div class="md:col-span-5 bg-slate-900/90 p-5 rounded-2xl border border-slate-800 shadow-xl">
+                    <span class="inline-block px-2.5 py-0.5 rounded bg-sky-500/10 text-sky-300 border border-sky-500/30 text-xs font-bold mb-2">Compétence D4 • Démarche scientifique</span>
+                    <h2 class="text-base font-bold text-white mb-2">❓ Problème &amp; Hypothèse</h2>
+                    <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                        À partir de ces deux documents réels, formulez la question scientifique que l'on se pose puis émettez une <strong>hypothèse explicative</strong>.
+                    </p>
+
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">1. Formuler le problème scientifique :</label>
+                            <textarea id="ans-eau-prob" class="w-full min-h-[65px] bg-slate-950 text-slate-100 p-2.5 rounded-xl border border-slate-700 text-xs focus:outline-none focus:border-sky-400" placeholder="Formulez le problème scientifique sous la forme d'une question..."></textarea>
+                            <div id="corr-ans-eau-prob" class="correction-box hidden mt-1.5 p-2.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-xs text-emerald-200 shadow-md">
+                                <strong>✅ Corrigé attendu :</strong> Comment expliquer l'accumulation massive de déchets plastiques sur les plages de l'île Henderson alors qu'elle est inhabitée et isolée à plus de 5 000 km des continents ?
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">2. Proposer une hypothèse explicative :</label>
+                            <textarea id="ans-eau-hyp" class="w-full min-h-[65px] bg-slate-950 text-slate-100 p-2.5 rounded-xl border border-slate-700 text-xs focus:outline-none focus:border-sky-400" placeholder="Formulez une hypothèse explicative..."></textarea>
+                            <div id="corr-ans-eau-hyp" class="correction-box hidden mt-1.5 p-2.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-xs text-emerald-200 shadow-md">
+                                <strong>✅ Corrigé attendu :</strong> On peut penser que des courants marins de surface transportent les déchets flottants à travers l'océan et les amènent jusqu'aux rivages de l'atoll.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 pt-3 border-t border-slate-800">
+                        <button onclick="setStep(2)" class="w-full py-2.5 bg-sky-500 text-slate-950 font-bold rounded-xl text-xs hover:bg-sky-400 transition flex items-center justify-center gap-1.5 shadow-md">
+                            <span>Tester l'hypothèse avec les modèles 3D</span>
+                            <span>➔</span>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ========================================================================= -->
+        <!-- VUES PLEIN ÉCRAN : ÉTAPE 4 (COMPRENDRE LE RÉEL)                           -->
+        <!-- ========================================================================= -->
+
+        <!-- Étape 4 : Masses d'Air (Schémas vectoriels HD animés & Convection réelle) -->
+        <div id="view-step4-air" class="hidden absolute inset-0 overflow-y-auto p-6 z-20 bg-slate-950">
+            <div class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+                
+                <!-- Colonne gauche : Schémas vectoriels animés HD haute définition -->
+                <div class="md:col-span-7 bg-slate-900/90 p-5 rounded-2xl border border-slate-800 shadow-xl">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold px-2.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30">Modélisation du réel • Haute définition</span>
+                        <span class="text-xs text-slate-400">Synoptique &amp; Coupe convective</span>
+                    </div>
+                    <h2 class="text-base font-bold text-white mb-3">🗺️ Carte synoptique (Septembre 2023) &amp; Boucle convective</h2>
+
+                    <!-- Schéma animé vectoriel HD professionnel -->
+                    <div class="rounded-xl overflow-hidden border border-slate-800 bg-slate-950 mb-3 shadow-inner">
+                        <svg viewBox="0 0 720 380" width="100%" class="block">
+                            <defs>
+                                <linearGradient id="skyAirGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="#091428"/>
+                                    <stop offset="100%" stop-color="#0f2142"/>
+                                </linearGradient>
+                                <radialGradient id="plumeGlow" cx="48%" cy="75%" r="65%">
+                                    <stop offset="0%" stop-color="#ea580c" stop-opacity="0.9"/>
+                                    <stop offset="50%" stop-color="#f59e0b" stop-opacity="0.6"/>
+                                    <stop offset="100%" stop-color="#fef08a" stop-opacity="0"/>
+                                </radialGradient>
+                                <filter id="glowAir" x="-20%" y="-20%" width="140%" height="140%">
+                                    <feGaussianBlur stdDeviation="3" result="blur"/>
+                                    <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+                                </filter>
+                                <marker id="arrowAmber" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b"/>
+                                </marker>
+                                <marker id="arrowRed" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444"/>
+                                </marker>
+                                <marker id="arrowSky" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+                                </marker>
+                            </defs>
+
+                            <rect width="720" height="380" fill="url(#skyAirGrad)"/>
+
+                            <!-- Séparateur vertical entre Doc A et Doc B -->
+                            <line x1="360" y1="15" x2="360" y2="365" stroke="#334155" stroke-width="2" stroke-dasharray="6,4"/>
+
+                            <!-- ================= DOC A : CARTE SYNOPTIQUE SEPTEMBRE 2023 ================= -->
+                            <g transform="translate(10, 10)">
+                                <text x="10" y="22" fill="#fcd34d" font-size="12" font-weight="bold">DOC A : Carte des pressions (Sept. 2023)</text>
+                                
+                                <!-- Relief Afrique du Nord / Sahara -->
+                                <path d="M 30,260 L 320,260 L 335,340 L 15,340 Z" fill="#451a03" stroke="#78350f" stroke-width="2"/>
+                                <text x="75" y="305" fill="#fde68a" font-size="12" font-weight="bold" letter-spacing="1">SAHARA (Air brûlant + Dust)</text>
+
+                                <!-- Relief Europe / France -->
+                                <path d="M 80,165 L 180,165 L 175,225 L 75,225 Z" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+                                <text x="95" y="198" fill="#94a3b8" font-size="10" font-weight="bold">Espagne</text>
+
+                                <path d="M 155,75 L 285,75 L 295,160 L 165,165 Z" fill="#1e293b" stroke="#94a3b8" stroke-width="2"/>
+                                <text x="195" y="120" fill="#ffffff" font-size="13" font-weight="bold">FRANCE</text>
+                                <text x="210" y="140" fill="#fca5a5" font-size="10" font-weight="bold">&gt; 35 °C (Canicule)</text>
+
+                                <!-- Panache de poussières de sable sahariennes remontant du Sahara vers la France -->
+                                <path d="M 120,290 Q 150,190 205,75 L 275,85 Q 240,200 240,290 Z" fill="url(#plumeGlow)"/>
+
+                                <!-- Flèche dynamique animée du flux du Sud -->
+                                <path d="M 185,275 Q 165,185 210,85" fill="none" stroke="#f59e0b" stroke-width="4.5" stroke-dasharray="8,6" marker-end="url(#arrowAmber)">
+                                    <animate attributeName="stroke-dashoffset" values="40;0" dur="2s" repeatCount="indefinite"/>
+                                </path>
+                                <text x="135" y="235" fill="#fde047" font-size="10.5" font-weight="bold" filter="url(#glowAir)">Vent du Sud (Dust)</text>
+                            </g>
+
+                            <!-- ================= DOC B : COUPE VERTICALE DE CONVECTION ================= -->
+                            <g transform="translate(370, 10)">
+                                <text x="10" y="22" fill="#38bdf8" font-size="12" font-weight="bold">DOC B : Mécanisme du vent au sol (Convection)</text>
+
+                                <!-- Sol -->
+                                <rect x="15" y="280" width="315" height="25" fill="#334155" rx="4"/>
+                                <text x="25" y="297" fill="#fca5a5" font-size="10" font-weight="bold">ZONE CHAUDE (Basse Pression)</text>
+                                <text x="205" y="297" fill="#7dd3fc" font-size="10" font-weight="bold">Haute Pression (Froid)</text>
+
+                                <!-- Ascendance rouge à gauche (air chaud moins dense) -->
+                                <path d="M 85,270 L 85,90" fill="none" stroke="#ef4444" stroke-width="5" stroke-linecap="round" marker-end="url(#arrowRed)"/>
+                                <text x="40" y="165" fill="#fca5a5" font-size="10" font-weight="bold">Air chaud</text>
+                                <text x="28" y="180" fill="#fca5a5" font-size="9.5">s'élève (moins dense)</text>
+
+                                <!-- Subsidence bleue à droite (air froid plus dense) -->
+                                <path d="M 265,90 L 265,265" fill="none" stroke="#38bdf8" stroke-width="5" stroke-linecap="round" marker-end="url(#arrowSky)"/>
+                                <text x="272" y="165" fill="#7dd3fc" font-size="10" font-weight="bold">Air froid</text>
+                                <text x="272" y="180" fill="#7dd3fc" font-size="9.5">plonge (plus dense)</text>
+
+                                <!-- Vent au sol : Haute pression (froid) vers Basse pression (chaud) -->
+                                <path d="M 245,265 L 105,265" fill="none" stroke="#fcd34d" stroke-width="5" stroke-linecap="round" marker-end="url(#arrowAmber)">
+                                    <animate attributeName="stroke-dashoffset" values="30;0" dur="1.5s" repeatCount="indefinite"/>
+                                </path>
+                                <text x="110" y="252" fill="#fde68a" font-size="11" font-weight="bold">⬅ VENT AU SOL (HP ➔ BP)</text>
+
+                                <!-- Courant d'altitude compensatoire -->
+                                <path d="M 105,90 L 245,90" fill="none" stroke="#94a3b8" stroke-width="3" stroke-dasharray="5,4" marker-end="url(#arrowSky)"/>
+                                <text x="135" y="80" fill="#94a3b8" font-size="9.5">Circulation d'altitude</text>
+
+                                <!-- Particules blanches animées dans la boucle convective -->
+                                <circle r="3.5" fill="#ffffff">
+                                    <animateMotion dur="4s" repeatCount="indefinite" path="M 245,265 L 85,265 L 85,90 L 265,90 Z"/>
+                                </circle>
+                                <circle r="3.5" fill="#ffffff">
+                                    <animateMotion dur="4s" begin="2s" repeatCount="indefinite" path="M 245,265 L 85,265 L 85,90 L 265,90 Z"/>
+                                </circle>
+                            </g>
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Colonne droite : Question 3 bilan de l'activité air -->
+                <div class="md:col-span-5 bg-slate-900/90 p-5 rounded-2xl border border-slate-800 shadow-xl">
+                    <span class="inline-block px-2.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30 text-xs font-bold mb-2">Compétences D1 &amp; D4 • Bilan d'investigation</span>
+                    <h2 class="text-base font-bold text-white mb-2">🔎 Question 3 : Résoudre le problème initial</h2>
+                    <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                        À l'aide des résultats de vos <strong>modèles 3D</strong> et des <strong>documents A et B</strong>, expliquez comment les différences de température et de pression ont généré le vent ayant transporté le sable du Sahara et la vague de chaleur sur la France en septembre 2023.
+                    </p>
+                    <div class="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800 text-[11px] text-slate-400 mb-3 space-y-1">
+                        <div>1. Expliquer comment le sable est soulevé (air chaud moins dense = <strong>Basse Pression</strong>).</div>
+                        <div>2. Rappeler le sens du vent (de la <strong>Haute Pression vers la Basse Pression</strong>).</div>
+                        <div>3. Valider explicitement votre hypothèse de l'étape 1.</div>
+                        <div>4. Utiliser des <strong>connecteurs logiques</strong> (<em>car, donc, parce que, ainsi...</em>) pour relier vos explications.</div>
+                    </div>
+                    <textarea id="ans-air-q3" class="w-full min-h-[120px] bg-slate-950 text-slate-100 p-2.5 rounded-xl border border-slate-700 text-xs leading-relaxed focus:outline-none focus:border-amber-400" placeholder="Rédigez votre explication globale et validez ou non votre hypothèse de départ..."></textarea>
+                    <div id="corr-ans-air-q3" class="correction-box hidden mt-2.5 p-3 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-xs text-emerald-200 leading-relaxed shadow-lg">
+                        <strong>✅ Corrigé attendu :</strong> Au niveau du Sahara, l'échauffement intense du sol réchauffe l'air qui s'élève par ascendance thermique (l'air chaud est moins dense) en créant une Basse Pression et en soulevant les poussières de sable. Les différences de pression atmosphérique créent un vent qui souffle toujours de la Haute vers la Basse pression. Ce puissant vent du Sud transporte l'air caniculaire et le sable en suspension jusqu'en France : mon hypothèse de départ est ainsi confirmée.
+                    </div>
+                    
+                    <button onclick="setStep(5)" class="w-full mt-4 py-2.5 bg-amber-500 text-slate-950 font-bold rounded-xl text-xs hover:bg-amber-400 transition flex items-center justify-center gap-1.5 shadow-md">
+                        <span>Passer à l'Étape 5 : Envoyer mon travail</span>
+                        <span>➔</span>
+                    </button>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Étape 4 : Masses d'Eau (Carte interactive Atlantique Nord 1 à 6 & Moteur thermohalin) -->
+        <div id="view-step4-eau" class="hidden absolute inset-0 overflow-y-auto p-6 z-20 bg-slate-950">
+            <div class="max-w-5xl mx-auto space-y-6">
+                
+                <!-- Carte interactive 1 : Tracer le sens des courants de surface (Atlantique Nord) -->
+                <div class="bg-slate-900/90 p-5 rounded-2xl border border-slate-800 shadow-xl">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold px-2.5 py-0.5 rounded bg-sky-500/10 text-sky-300 border border-sky-500/30">Activité interactive • Manipulation au doigt / souris</span>
+                        <span class="text-xs text-slate-400">Courants de surface &amp; Vents dominants</span>
+                    </div>
+                    <h2 class="text-base font-bold text-white mb-2">🗺️ 1. Tracer le sens des courants marins de surface (Points 1 à 6)</h2>
+                    <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                        <span class="text-red-400 font-bold">Rouge = Courant chaud</span>, <span class="text-sky-400 font-bold">Bleu = Courant froid</span>. Les <strong>flèches grises</strong> indiquent les <strong>vents dominants</strong> qui entraînent l'eau.<br>
+                        👉 <em>Glissez depuis chaque point numéroté (1 à 6) pour orienter la flèche dans le sens du courant entraîné par le vent, puis cliquez sur « Vérifier » !</em>
+                    </p>
+
+                    <div class="relative bg-slate-950 rounded-xl overflow-hidden border border-slate-800 touch-none">
+                        <svg id="ocean-map-svg" viewBox="0 0 850 470" width="100%" class="block">
+                            <defs>
+                                <marker id="arrowGray" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+                                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#94a3b8"/>
+                                </marker>
+                                <marker id="arrowUser" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#facc15"/>
+                                </marker>
+                                <marker id="arrowOk" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#22c55e"/>
+                                </marker>
+                                <marker id="arrowKo" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444"/>
+                                </marker>
+                            </defs>
+
+                            <rect width="850" height="470" fill="#081a2e"/>
+
+                            <!-- Masses continentales -->
+                            <path d="M 0 0 L 210 0 L 185 180 L 135 230 L 160 250 L 95 295 L 40 340 L 0 390 Z" fill="#1b2a1e" stroke="#334155" stroke-width="1.5"/>
+                            <text x="35" y="135" fill="#94a3b8" font-size="12" font-weight="bold">AMÉRIQUE DU NORD</text>
+
+                            <path d="M 265 0 L 395 0 L 365 110 L 320 155 L 285 95 Z" fill="#1b2a1e" stroke="#334155" stroke-width="1.5"/>
+                            <text x="295" y="62" fill="#94a3b8" font-size="11" font-weight="bold">GROENLAND</text>
+
+                            <ellipse cx="520" cy="112" rx="38" ry="22" fill="#1b2a1e" stroke="#334155" stroke-width="1.5"/>
+                            <text x="502" y="150" fill="#94a3b8" font-size="10">Islande</text>
+
+                            <ellipse cx="670" cy="182" rx="14" ry="26" fill="#1b2a1e" stroke="#334155" stroke-width="1.5"/>
+                            <ellipse cx="615" cy="195" rx="11" ry="16" fill="#1b2a1e" stroke="#334155" stroke-width="1.5"/>
+
+                            <path d="M 790 0 L 850 0 L 850 310 L 630 305 L 615 255 L 690 225 L 725 180 Z" fill="#1b2a1e" stroke="#334155" stroke-width="1.5"/>
+                            <text x="735" y="245" fill="#94a3b8" font-size="12" font-weight="bold">EUROPE</text>
+
+                            <path d="M 625 315 L 850 320 L 850 470 L 540 470 L 560 400 Z" fill="#1b2a1e" stroke="#334155" stroke-width="1.5"/>
+                            <text x="730" y="395" fill="#94a3b8" font-size="12" font-weight="bold">AFRIQUE</text>
+
+                            <!-- Vents dominants -->
+                            <g id="dominant-winds-layer">
+                                <text x="355" y="188" fill="#cbd5e1" font-size="11.5" font-style="italic" font-weight="bold">Vents d'ouest (Westerlies)</text>
+                                <line x1="320" y1="205" x2="355" y2="205" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#arrowGray)"/>
+                                <line x1="395" y1="215" x2="430" y2="212" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#arrowGray)"/>
+                                <line x1="470" y1="203" x2="505" y2="203" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#arrowGray)"/>
+
+                                <text x="365" y="385" fill="#cbd5e1" font-size="11.5" font-style="italic" font-weight="bold">Alizés (Trade winds)</text>
+                                <line x1="350" y1="402" x2="315" y2="402" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#arrowGray)"/>
+                                <line x1="425" y1="412" x2="390" y2="412" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#arrowGray)"/>
+                                <line x1="500" y1="402" x2="465" y2="405" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#arrowGray)"/>
+                            </g>
+
+                            <!-- Courants marins -->
+                            <path d="M 30 375 C 95 290, 145 255, 250 245 C 390 230, 560 225, 680 185" fill="none" stroke="#dc2626" stroke-width="11" stroke-linecap="round"/>
+                            <text x="230" y="228" fill="#fca5a5" font-size="12" font-weight="bold">Gulf Stream (chaud)</text>
+                            <text x="480" y="212" fill="#fca5a5" font-size="11" font-weight="bold">Dérive Nord-Atlantique (chaud)</text>
+
+                            <path d="M 212 150 C 195 200, 180 230, 162 252" fill="none" stroke="#0284c7" stroke-width="10" stroke-linecap="round"/>
+                            <text x="92" y="178" fill="#7dd3fc" font-size="11" font-weight="bold">Courant du Labrador (froid)</text>
+
+                            <path d="M 625 265 C 600 325, 580 375, 560 412" fill="none" stroke="#0284c7" stroke-width="10" stroke-linecap="round"/>
+                            <text x="485" y="340" fill="#7dd3fc" font-size="11" font-weight="bold">Courant des Canaries (froid)</text>
+
+                            <path d="M 550 430 C 380 438, 200 438, 60 430" fill="none" stroke="#dc2626" stroke-width="11" stroke-linecap="round"/>
+                            <text x="265" y="420" fill="#fca5a5" font-size="11" font-weight="bold">Courant équatorial (chaud)</text>
+
+                            <g id="user-arrows-ocean"></g>
+                            <g id="nodes-ocean"></g>
+                        </svg>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-3 mt-3">
+                        <button onclick="verifyOceanMap()" class="px-4 py-2 bg-emerald-500 text-slate-950 font-bold rounded-lg text-xs hover:bg-emerald-400 transition">✔ Vérifier mes flèches</button>
+                        <button onclick="showOceanMapCorrection()" class="px-3 py-2 bg-sky-600 text-white font-semibold rounded-lg text-xs hover:bg-sky-500 transition">👁️ Voir la correction</button>
+                        <button onclick="resetOceanMap()" class="px-3 py-2 bg-slate-800 text-slate-300 font-semibold rounded-lg text-xs hover:bg-slate-700 transition">↺ Effacer</button>
+                        <span id="ocean-map-feedback" class="text-xs font-semibold"></span>
+                    </div>
+                </div>
+
+                <!-- Schéma fonctionnel 2 : Le moteur thermohalin & Île Henderson -->
+                <div class="bg-slate-900/90 p-5 rounded-2xl border border-slate-800 shadow-xl">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold px-2.5 py-0.5 rounded bg-sky-500/10 text-sky-300 border border-sky-500/30">Circulation globale &amp; Gyres océaniques</span>
+                        <span class="text-xs text-slate-400">Équateur ➔ Pôles</span>
+                    </div>
+                    <h2 class="text-base font-bold text-white mb-3">🌊 2. Le Moteur Universel : Courants chauds de surface &amp; Courants froids profonds</h2>
+
+                    <div class="rounded-xl overflow-hidden border border-slate-800 bg-slate-950 p-4 mb-4">
+                        <svg viewBox="0 0 800 240" width="100%" class="block">
+                            <defs>
+                                <linearGradient id="depthGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="#0284c7"/>
+                                    <stop offset="100%" stop-color="#082f49"/>
+                                </linearGradient>
+                            </defs>
+                            <text x="30" y="25" fill="#f87171" font-size="13" font-weight="bold">ÉQUATEUR (Eau chaude, moins dense)</text>
+                            <text x="560" y="25" fill="#38bdf8" font-size="13" font-weight="bold">PÔLE (Eau froide, plus dense)</text>
+                            
+                            <rect x="15" y="40" width="770" height="180" rx="8" fill="url(#depthGrad)"/>
+
+                            <!-- Courant chaud surface -->
+                            <path d="M 110 85 Q 400 65 690 88" fill="none" stroke="#ef4444" stroke-width="8" stroke-linecap="round" marker-end="url(#arrowRed)"/>
+                            <text x="400" y="62" text-anchor="middle" fill="#fca5a5" font-size="11.5" font-weight="bold">Courant chaud de surface : Équateur ➔ Pôle (ex: Gulf Stream)</text>
+
+                            <!-- Plongée au pôle -->
+                            <path d="M 705 105 Q 725 138 700 165" fill="none" stroke="#38bdf8" stroke-width="4" stroke-dasharray="5,3" marker-end="url(#arrowSky)"/>
+
+                            <!-- Courant froid fond -->
+                            <path d="M 685 180 Q 400 200 115 178" fill="none" stroke="#38bdf8" stroke-width="8" stroke-linecap="round" marker-end="url(#arrowSky)"/>
+                            <text x="400" y="215" text-anchor="middle" fill="#bae6fd" font-size="11.5" font-weight="bold">Courant froid profond : Pôle ➔ Équateur (l'eau froide plus dense plonge)</text>
+
+                            <!-- Remontée -->
+                            <path d="M 95 165 Q 75 135 98 102" fill="none" stroke="#f87171" stroke-width="4" stroke-dasharray="5,3" marker-end="url(#arrowRed)"/>
+
+                            <!-- Particules animées -->
+                            <circle r="4" fill="#ffffff">
+                                <animateMotion dur="6s" repeatCount="indefinite" path="M 110 85 Q 400 65 690 88 L 700 180 Q 400 200 115 178 Z"/>
+                            </circle>
+                            <circle r="4" fill="#ffffff">
+                                <animateMotion dur="6s" begin="3s" repeatCount="indefinite" path="M 110 85 Q 400 65 690 88 L 700 180 Q 400 200 115 178 Z"/>
+                            </circle>
+                        </svg>
+                    </div>
+
+                    <!-- Question 3 de synthèse sur l'île Henderson -->
+                    <span class="inline-block px-2.5 py-0.5 rounded bg-sky-500/10 text-sky-300 border border-sky-500/30 text-xs font-bold mb-2">Synthèse • Résolution du problème</span>
+                    <h3 class="text-sm font-bold text-white mb-2">Question 3 : Expliquer l'accumulation des plastiques sur l'île Henderson</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed mb-2">
+                        À l'aide de la carte interactive et des modèles, expliquez comment les déchets plastiques jetés à des milliers de kilomètres s'accumulent sur les plages de l'île Henderson (reliez vents dominants, courants de surface et gyres océaniques).
+                    </p>
+                    <div class="bg-slate-950/80 p-2 rounded-lg border border-slate-800 text-[11px] text-slate-400 mb-2.5">
+                        💡 <strong>Consigne de rédaction :</strong> Utilisez des <strong>connecteurs logiques</strong> (<em>car, donc, ainsi, parce que...</em>) pour expliquer l'enchaînement de cause à effet.
+                    </div>
+                    <textarea id="ans-eau-q3" class="w-full min-h-[90px] bg-slate-950 text-slate-100 p-2.5 rounded-xl border border-slate-700 text-xs leading-relaxed focus:outline-none focus:border-sky-400" placeholder="Rédigez votre explication reliant vents dominants, courants de surface et gyres océaniques..."></textarea>
+                    <div id="corr-ans-eau-q3" class="correction-box hidden mt-2.5 p-3 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-xs text-emerald-200 leading-relaxed shadow-lg">
+                        <strong>✅ Corrigé attendu :</strong> Les vents dominants mettent en mouvement les courants océaniques de surface qui s'organisent en gigantesques tourbillons circulaires à l'échelle des bassins océaniques : les <strong>gyres océaniques</strong>. Ces gyres concentrent et transportent tous les débris plastiques flottants d'Amérique du Sud ou d'Asie vers le centre du Pacifique Sud, où ils finissent piégés et viennent s'échouer en masse sur les plages de l'atoll d'Henderson.
+                    </div>
+                    
+                    <button onclick="setStep(5)" class="w-full mt-3 py-2.5 bg-sky-500 text-slate-950 font-bold rounded-xl text-xs hover:bg-sky-400 transition flex items-center justify-center gap-1.5 shadow-md">
+                        <span>Passer à l'Étape 5 : Envoyer mon travail</span>
+                        <span>➔</span>
+                    </button>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ========================================================================= -->
+        <!-- VUES PLEIN ÉCRAN : ÉTAPE 5 (BILAN, ENVOI GOOGLE SHEETS & CORRECTION)      -->
+        <!-- ========================================================================= -->
+        <div id="view-step5" class="hidden absolute inset-0 overflow-y-auto p-6 z-20 bg-slate-950">
+            <div class="max-w-4xl mx-auto space-y-6">
+
+                <!-- Carte Envoi au professeur -->
+                <div class="bg-slate-900/90 p-6 rounded-2xl border border-slate-800 shadow-xl">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-bold px-2.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">Transmission numérique</span>
+                        <span class="text-xs text-slate-400">Google Sheets sécurisé</span>
+                    </div>
+                    <h2 class="text-lg font-bold text-white mb-1.5">📤 Étape finale : Envoyer mon travail au professeur</h2>
+                    <p class="text-xs text-slate-300 leading-relaxed mb-4">
+                        Vérifiez que votre <strong>NOM, Prénom et Classe</strong> sont bien saisis en haut de page, puis cliquez ci-dessous pour transmettre automatiquement l'ensemble de vos réponses rédigées et vos évaluations.
+                    </p>
+                    
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <button id="btn-send-work" onclick="submitActiveActivity()" class="flex-1 py-3 px-6 bg-emerald-500 text-slate-950 font-bold rounded-xl text-sm hover:bg-emerald-400 transition shadow-lg flex items-center justify-center gap-2">
+                            <span>📨</span>
+                            <span id="btn-send-label">Envoyer l'activité Masses d'Air</span>
+                        </button>
+                        <button onclick="submitBothActivities()" class="py-3 px-5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold rounded-xl text-xs transition">
+                            📦 Envoyer Air + Eau en même temps
+                        </button>
+                    </div>
+
+                    <div id="send-status-box" class="hidden mt-4 p-3.5 rounded-xl text-xs leading-relaxed"></div>
+                </div>
+
+                <!-- Carte Déverrouillage Bilan -->
+                <div class="bg-slate-900/90 p-6 rounded-2xl border border-slate-800 shadow-xl">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold px-2.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30">Auto-évaluation guidée</span>
+                        <span class="text-xs text-slate-400">Code enseignant</span>
+                    </div>
+                    <h2 class="text-base font-bold text-white mb-2">🔐 Déverrouiller le Bilan, la Grille critériée et le Corrigé</h2>
+                    <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                        Une fois vos réponses transmises, demandez le <strong>code de déverrouillage</strong> à votre professeur pour afficher le corrigé détaillé sous chaque question et votre grille critériée.
+                    </p>
+                    
+                    <div class="flex flex-wrap items-center gap-2">
+                        <input type="password" id="teacher-code-input" placeholder="Code enseignant..." onkeydown="if(event.key==='Enter') unlockCorrectionZone()" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white uppercase tracking-wider focus:outline-none focus:border-amber-400">
+                        <button onclick="unlockCorrectionZone()" class="px-4 py-2 bg-amber-500 text-slate-950 font-bold rounded-xl text-xs hover:bg-amber-400 transition">
+                            🔓 Déverrouiller
+                        </button>
+                        <span id="unlock-err-msg" class="hidden text-xs text-red-400 font-semibold">❌ Code incorrect. Demandez le code au professeur.</span>
+                    </div>
+                </div>
+
+                <!-- Zone de correction verrouillée -->
+                <div id="correction-unlocked-zone" class="hidden space-y-6">
+                    
+                    <!-- Grille critériée -->
+                    <div class="bg-slate-900/90 p-6 rounded-2xl border border-slate-800 shadow-xl">
+                        <h2 class="text-base font-bold text-white mb-4 flex items-center justify-between">
+                            <span>📊 Mon Évaluation par Grille Critériée</span>
+                            <span id="badge-mastery-level" class="text-xs px-2.5 py-1 rounded-full font-bold"></span>
+                        </h2>
+
+                        <!-- 4 Score boxes -->
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                            <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-center">
+                                <div class="text-[11px] text-slate-400 font-semibold uppercase">Score Global</div>
+                                <div id="res-score-total" class="text-xl font-extrabold text-amber-400 mt-1">0 / 10</div>
+                            </div>
+                            <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-center">
+                                <div class="text-[11px] text-slate-400 font-semibold uppercase">D4 — Démarche/Modèles</div>
+                                <div id="res-score-d4" class="text-xl font-extrabold text-sky-400 mt-1">0 / 4</div>
+                            </div>
+                            <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-center">
+                                <div class="text-[11px] text-slate-400 font-semibold uppercase">D1 — Explication physique</div>
+                                <div id="res-score-d1" class="text-xl font-extrabold text-purple-400 mt-1">0 / 4</div>
+                            </div>
+                            <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-center">
+                                <div class="text-[11px] text-slate-400 font-semibold uppercase">Maîtrise Langue</div>
+                                <div id="res-score-lang" class="text-xl font-extrabold text-emerald-400 mt-1">0 / 2</div>
+                            </div>
+                        </div>
+
+                        <!-- Tableau des critères -->
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-950 text-slate-400 border-b border-slate-800">
+                                        <th class="p-2.5">Étape / Compétence</th>
+                                        <th class="p-2.5">Critère de réussite évalué</th>
+                                        <th class="p-2.5 text-center">Statut</th>
+                                        <th class="p-2.5 text-right">Points</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="criteria-table-body" class="divide-y divide-slate-800 text-slate-300"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Corrigé type -->
+                    <div class="bg-slate-900/90 p-6 rounded-2xl border border-slate-800 shadow-xl text-xs leading-relaxed space-y-3">
+                        <h2 class="text-base font-bold text-white mb-2">✅ Corrigé type complet</h2>
+                        <div id="corrige-content" class="text-slate-300 space-y-2"></div>
+                    </div>
+
+                    <!-- Bilan du cours -->
+                    <div class="bg-slate-900/90 p-6 rounded-2xl border border-slate-800 shadow-xl">
+                        <h2 class="text-base font-bold text-white mb-3">📌 Notions essentielles à retenir (Bilan de cours)</h2>
+                        <div class="p-4 bg-amber-500/10 border-l-4 border-amber-500 rounded-xl text-xs leading-relaxed text-slate-200 space-y-2">
+                            <p><strong>1. Mouvements verticaux et pression atmosphérique / océanique :</strong> L'air chaud ou l'eau chaude est <strong>moins dense</strong> : il/elle s'élève (ou reste en surface). À l'inverse, l'air froid ou l'eau froide est <strong>plus dense</strong> : il/elle descend (plonge vers le fond).</p>
+                            <p><strong>2. Naissance du vent et des courants marins de surface :</strong> Le vent est un déplacement horizontal d'air qui souffle d'une zone de <strong>Haute Pression vers une zone de Basse Pression</strong>. En frottant sur l'océan, ces vents dominants mettent en mouvement les <strong>courants marins de surface</strong>, formant de grands tourbillons (gyres) qui emportent chaleur, sable désertique et déchets plastiques.</p>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+
+    <!-- LOGIQUE JAVASCRIPT & MOTEUR THREE.JS -->
+    <script>
+        // =========================================================================
+        // 1. GESTION DE L'ÉTAT GLOBAL & THÈMES (AIR / EAU)
+        // =========================================================================
+        let currentTheme = 'air'; // 'air' ou 'eau'
+        let currentStep = 1;     // 1, 2, 3, 4, 5
+
+        function switchTheme(theme) {
+            currentTheme = theme;
+            const btnAir = document.getElementById('btn-theme-air');
+            const btnEau = document.getElementById('btn-theme-eau');
+            const btnSendLabel = document.getElementById('btn-send-label');
+
+            if (theme === 'air') {
+                btnAir.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-amber-500 text-slate-950 shadow-sm";
+                btnEau.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition-all";
+                btnSendLabel.innerText = "Envoyer l'activité Masses d'Air";
+            } else {
+                btnEau.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-sky-500 text-slate-950 shadow-sm";
+                btnAir.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition-all";
+                btnSendLabel.innerText = "Envoyer l'activité Masses d'Eau";
+            }
+            updateViewLayout();
+        }
+
+        function setStep(step) {
+            currentStep = step;
+            // Mise à jour de la classe active sur les 5 onglets
+            for (let i = 1; i <= 5; i++) {
+                const btn = document.getElementById(`tab-step-${i}`);
+                if (i === step) {
+                    btn.className = `step-tab-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${currentTheme === 'air' ? 'bg-amber-500 text-slate-950' : 'bg-sky-500 text-slate-950'}`;
+                } else if (i === 5) {
+                    btn.className = "step-tab-btn px-3 py-1.5 rounded-lg text-xs font-bold text-sky-400 border border-sky-500/30 hover:bg-sky-500/10 transition-all";
+                } else {
+                    btn.className = "step-tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white transition-all";
+                }
+            }
+            updateViewLayout();
+        }
+
+        function updateViewLayout() {
+            // Masquage général
+            document.getElementById('view-step1-air').classList.add('hidden');
+            document.getElementById('view-step1-eau').classList.add('hidden');
+            document.getElementById('view-step4-air').classList.add('hidden');
+            document.getElementById('view-step4-eau').classList.add('hidden');
+            document.getElementById('view-step5').classList.add('hidden');
+
+            document.getElementById('panel-ctrl-air-mod1').classList.add('hidden');
+            document.getElementById('panel-ctrl-air-mod2').classList.add('hidden');
+            document.getElementById('panel-ctrl-eau-mod1').classList.add('hidden');
+            document.getElementById('panel-ctrl-eau-mod2').classList.add('hidden');
+
+            document.getElementById('qpanel-air-mod1').classList.add('hidden');
+            document.getElementById('qpanel-air-mod2').classList.add('hidden');
+            document.getElementById('qpanel-eau-mod1').classList.add('hidden');
+            document.getElementById('qpanel-eau-mod2').classList.add('hidden');
+
+            // Visibilité des scènes 3D
+            groupAirBlocks.visible = (currentTheme === 'air' && currentStep === 2);
+            groupAirBox.visible = (currentTheme === 'air' && currentStep === 3);
+            groupEauHorizontal.visible = (currentTheme === 'eau' && currentStep === 2);
+            groupEauVertical.visible = (currentTheme === 'eau' && currentStep === 3);
+
+            // Affichage selon l'étape et le thème
+            if (currentStep === 1) {
+                if (currentTheme === 'air') document.getElementById('view-step1-air').classList.remove('hidden');
+                else document.getElementById('view-step1-eau').classList.remove('hidden');
+            } else if (currentStep === 2) {
+                if (currentTheme === 'air') {
+                    document.getElementById('panel-ctrl-air-mod1').classList.remove('hidden');
+                    document.getElementById('qpanel-air-mod1').classList.remove('hidden');
+                } else {
+                    document.getElementById('panel-ctrl-eau-mod1').classList.remove('hidden');
+                    document.getElementById('qpanel-eau-mod1').classList.remove('hidden');
+                }
+            } else if (currentStep === 3) {
+                if (currentTheme === 'air') {
+                    document.getElementById('panel-ctrl-air-mod2').classList.remove('hidden');
+                    document.getElementById('qpanel-air-mod2').classList.remove('hidden');
+                } else {
+                    document.getElementById('panel-ctrl-eau-mod2').classList.remove('hidden');
+                    document.getElementById('qpanel-eau-mod2').classList.remove('hidden');
+                }
+            } else if (currentStep === 4) {
+                if (currentTheme === 'air') document.getElementById('view-step4-air').classList.remove('hidden');
+                else document.getElementById('view-step4-eau').classList.remove('hidden');
+            } else if (currentStep === 5) {
+                document.getElementById('view-step5').classList.remove('hidden');
+            }
+        }
+
+        // =========================================================================
+        // 2. COMPARATEUR SWIPE INTERACTIF (DUST SAHARA)
+        // =========================================================================
+        (function initSwipeDust() {
+            const stage = document.getElementById('dust-stage');
+            const clipper = document.getElementById('dust-clipper');
+            const beforeImg = document.getElementById('dust-before-img');
+            let isDragging = false;
+
+            function updateClip(xPos) {
+                const rect = stage.getBoundingClientRect();
+                let pct = ((xPos - rect.left) / rect.width) * 100;
+                pct = Math.max(0, Math.min(100, pct));
+                clipper.style.width = pct + '%';
+                beforeImg.style.width = rect.width + 'px';
+            }
+
+            stage.addEventListener('pointerdown', (e) => {
+                isDragging = true;
+                updateClip(e.clientX);
+            });
+            window.addEventListener('pointermove', (e) => {
+                if (isDragging) updateClip(e.clientX);
+            });
+            window.addEventListener('pointerup', () => { isDragging = false; });
+            window.addEventListener('resize', () => {
+                const rect = stage.getBoundingClientRect();
+                beforeImg.style.width = rect.width + 'px';
+            });
+        })();
+
+        // =========================================================================
+        // 3. CARTE INTERACTIVE DES COURANTS DE SURFACE (ATLANTIQUE NORD 1 À 6)
+        // =========================================================================
+        const oceanNodes = [
+            { id: 1, x: 92,  y: 295, expectedAngle: -52 },
+            { id: 2, x: 378, y: 235, expectedAngle: -8  },
+            { id: 3, x: 605, y: 215, expectedAngle: -22 },
+            { id: 4, x: 185, y: 205, expectedAngle: 118 },
+            { id: 5, x: 595, y: 325, expectedAngle: 112 },
+            { id: 6, x: 350, y: 435, expectedAngle: 180 }
+        ];
+        const userOceanArrows = {};
+        let activeOceanNode = null;
+        let oceanMapScore = 0;
+
+        function initOceanMap() {
+            const nodesLayer = document.getElementById('nodes-ocean');
+            const svg = document.getElementById('ocean-map-svg');
+            nodesLayer.innerHTML = "";
+
+            oceanNodes.forEach(n => {
+                const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                g.style.cursor = "pointer";
+                g.innerHTML = `
+                    <circle cx="${n.x}" cy="${n.y}" r="13" fill="#0f172a" stroke="#fff" stroke-width="2.5"/>
+                    <text x="${n.x}" y="${n.y + 4}" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">${n.id}</text>
+                `;
+                g.addEventListener("pointerdown", (e) => {
+                    e.preventDefault();
+                    activeOceanNode = n;
+                });
+                nodesLayer.appendChild(g);
+            });
+
+            svg.addEventListener("pointermove", (e) => {
+                if (!activeOceanNode) return;
+                const rect = svg.getBoundingClientRect();
+                const x = (e.clientX - rect.left) * (850 / rect.width);
+                const y = (e.clientY - rect.top) * (470 / rect.height);
+                const dx = x - activeOceanNode.x;
+                const dy = y - activeOceanNode.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist < 10) return;
+                const len = Math.min(65, Math.max(35, dist));
+                const rad = Math.atan2(dy, dx);
+                userOceanArrows[activeOceanNode.id] = {
+                    x2: activeOceanNode.x + Math.cos(rad) * len,
+                    y2: activeOceanNode.y + Math.sin(rad) * len,
+                    angleDeg: rad * (180 / Math.PI),
+                    status: 'user'
+                };
+                renderOceanArrows();
+            });
+
+            window.addEventListener("pointerup", () => { activeOceanNode = null; });
+        }
+
+        function renderOceanArrows() {
+            const layer = document.getElementById('user-arrows-ocean');
+            layer.innerHTML = "";
+            oceanNodes.forEach(n => {
+                const arr = userOceanArrows[n.id];
+                if (!arr) return;
+                let stroke = "#facc15", marker = "url(#arrowUser)";
+                if (arr.status === 'ok') { stroke = "#22c55e"; marker = "url(#arrowOk)"; }
+                if (arr.status === 'ko') { stroke = "#ef4444"; marker = "url(#arrowKo)"; }
+
+                const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                line.setAttribute("x1", n.x);
+                line.setAttribute("y1", n.y);
+                line.setAttribute("x2", arr.x2);
+                line.setAttribute("y2", arr.y2);
+                line.setAttribute("stroke", stroke);
+                line.setAttribute("stroke-width", "4");
+                line.setAttribute("marker-end", marker);
+                layer.appendChild(line);
+            });
+        }
+
+        function verifyOceanMap() {
+            let ok = 0;
+            oceanNodes.forEach(n => {
+                const arr = userOceanArrows[n.id];
+                if (!arr) return;
+                let diff = Math.abs(arr.angleDeg - n.expectedAngle) % 360;
+                if (diff > 180) diff = 360 - diff;
+                if (diff <= 50) { arr.status = 'ok'; ok++; }
+                else { arr.status = 'ko'; }
+            });
+            oceanMapScore = ok >= 4 ? 1 : (ok >= 2 ? 0.5 : 0);
+            renderOceanArrows();
+            const fb = document.getElementById('ocean-map-feedback');
+            fb.style.color = ok >= 4 ? "#4ade80" : "#f87171";
+            fb.innerText = `Résultat : ${ok} / 6 flèches bien orientées dans le sens des vents dominants.`;
+        }
+
+        function showOceanMapCorrection() {
+            oceanNodes.forEach(n => {
+                const rad = n.expectedAngle * (Math.PI / 180);
+                userOceanArrows[n.id] = {
+                    x2: n.x + Math.cos(rad) * 55,
+                    y2: n.y + Math.sin(rad) * 55,
+                    angleDeg: n.expectedAngle,
+                    status: 'ok'
+                };
+            });
+            renderOceanArrows();
+            document.getElementById('ocean-map-feedback').innerText = "Corrigé : Observez la boucle circulaire (gyre océanique) tournant dans le sens horaire.";
+        }
+
+        function resetOceanMap() {
+            Object.keys(userOceanArrows).forEach(k => delete userOceanArrows[k]);
+            renderOceanArrows();
+            document.getElementById('ocean-map-feedback').innerText = "";
+        }
+
+        initOceanMap();
+
+        // =========================================================================
+        // 4. MOTEUR 3D THREE.JS (MODÈLES AIR ET EAU)
+        // =========================================================================
+        const container = document.getElementById('canvas-container');
+        const labelsContainer = document.getElementById('labels-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0b1324);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / (window.innerHeight - 60), 0.1, 1000);
+        camera.position.set(0, 3.6, 14.8);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight - 60);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+        dirLight.position.set(10, 16, 12);
+        scene.add(dirLight);
+
+        const grid = new THREE.GridHelper(22, 22, 0x334155, 0x1e293b);
+        grid.position.y = -3.1;
+        scene.add(grid);
+
+        // Groupes 3D
+        const groupAirBlocks = new THREE.Group();
+        const groupAirBox = new THREE.Group();
+        const groupEauHorizontal = new THREE.Group();
+        const groupEauVertical = new THREE.Group();
+
+        scene.add(groupAirBlocks);
+        scene.add(groupAirBox);
+        scene.add(groupEauHorizontal);
+        scene.add(groupEauVertical);
+
+        groupAirBlocks.visible = false;
+        groupAirBox.visible = false;
+        groupEauHorizontal.visible = false;
+        groupEauVertical.visible = false;
+
+        // Étiquettes 3D
+        const labelsList = [];
+        function addLabel3D(text, pos3D, reqTheme, reqStep, cssClass = '') {
+            const div = document.createElement('div');
+            div.className = 'label-3d ' + cssClass;
+            div.innerHTML = text;
+            labelsContainer.appendChild(div);
+            const obj = { element: div, pos: pos3D.clone(), reqTheme, reqStep, visible: true };
+            labelsList.push(obj);
+            return obj;
+        }
+
+        function updateLabels3D() {
+            const wHalf = renderer.domElement.clientWidth / 2;
+            const hHalf = renderer.domElement.clientHeight / 2;
+            labelsList.forEach(lbl => {
+                if (lbl.reqTheme !== currentTheme || lbl.reqStep !== currentStep || !lbl.visible) {
+                    lbl.element.style.display = 'none';
+                    return;
+                }
+                const v = lbl.pos.clone().project(camera);
+                if (v.z > 1) { lbl.element.style.display = 'none'; return; }
+                lbl.element.style.display = 'block';
+                lbl.element.style.left = `${(v.x * wHalf) + wHalf}px`;
+                lbl.element.style.top = `${-(v.y * hHalf) + hHalf}px`;
+            });
+        }
+
+        // --- SCÈNE AIR MODÈLE 1 : BLOCS ---
+        const subAirAmb = new THREE.Group();
+        const subAirFroz = new THREE.Group();
+        groupAirBlocks.add(subAirAmb);
+        groupAirBlocks.add(subAirFroz);
+
+        const blockGeo = new THREE.BoxGeometry(3.2, 0.75, 1.7);
+        const stickGeo = new THREE.CylinderGeometry(0.05, 0.05, 2.3, 12);
+        const stickMat = new THREE.MeshPhongMaterial({ color: 0x78350f });
+        const tipGeo = new THREE.SphereGeometry(0.09, 12, 12);
+        const tipMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+
+        const ambBlockMesh = new THREE.Mesh(blockGeo, new THREE.MeshPhongMaterial({ color: 0x94a3b8 }));
+        ambBlockMesh.position.set(-3.6, 1.2, 0);
+        subAirAmb.add(ambBlockMesh);
+
+        const stickLeft = new THREE.Mesh(stickGeo, stickMat);
+        stickLeft.position.set(-2.8, -1.2, 0);
+        stickLeft.rotation.z = Math.PI / 4;
+        subAirAmb.add(stickLeft);
+
+        const tipLeft = new THREE.Mesh(tipGeo, tipMat);
+        tipLeft.position.set(-3.6, -0.35, 0);
+        subAirAmb.add(tipLeft);
+
+        const frozBlockMesh = new THREE.Mesh(blockGeo, new THREE.MeshPhongMaterial({ color: 0x38bdf8, shininess: 90 }));
+        frozBlockMesh.position.set(2.8, 1.2, 0);
+        subAirFroz.add(frozBlockMesh);
+
+        const stickRight = new THREE.Mesh(stickGeo, stickMat);
+        stickRight.position.set(3.6, -1.2, 0);
+        stickRight.rotation.z = Math.PI / 4;
+        subAirFroz.add(stickRight);
+
+        const tipRight = new THREE.Mesh(tipGeo, tipMat);
+        tipRight.position.set(2.8, -0.35, 0);
+        subAirFroz.add(tipRight);
+
+        const smokeGeo = new THREE.SphereGeometry(0.105, 10, 10);
+        const smokeWarmMat = new THREE.MeshBasicMaterial({ color: 0xfca5a5, transparent: true, opacity: 0.65 });
+        const smokeColdMat = new THREE.MeshBasicMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.65 });
+
+        const ambientParticles = [];
+        const frozenParticles = [];
+        for (let i = 0; i < 85; i++) {
+            const pa = new THREE.Mesh(smokeGeo, smokeWarmMat);
+            pa.userData = { t: Math.random(), side: (i % 2 === 0) ? 1 : -1, zOff: (Math.random() - 0.5) * 0.55 };
+            subAirAmb.add(pa);
+            ambientParticles.push(pa);
+
+            const pf = new THREE.Mesh(smokeGeo, smokeColdMat);
+            pf.userData = { t: Math.random(), side: (i % 2 === 0) ? 1 : -1, zOff: (Math.random() - 0.5) * 0.55 };
+            subAirFroz.add(pf);
+            frozenParticles.push(pf);
+        }
+
+        const lblAmbBlock = addLabel3D("Bloc à température ambiante", new THREE.Vector3(-3.6, 2.0, 0), 'air', 2);
+        const lblAmbInc = addLabel3D("Encens (Fumée chaude)", new THREE.Vector3(-3.6, -2.1, 0), 'air', 2, 'hot');
+        const lblFrozBlock = addLabel3D("Bloc congelé (Froid)", new THREE.Vector3(2.8, 2.0, 0), 'air', 2, 'cold');
+        const lblFrozInc = addLabel3D("Encens", new THREE.Vector3(2.8, -2.1, 0), 'air', 2, 'cold');
+
+        function setAirBlockFilter(filter) {
+            subAirAmb.visible = (filter === 'both' || filter === 'ambient');
+            subAirFroz.visible = (filter === 'both' || filter === 'frozen');
+            lblAmbBlock.visible = subAirAmb.visible;
+            lblAmbInc.visible = subAirAmb.visible;
+            lblFrozBlock.visible = subAirFroz.visible;
+            lblFrozInc.visible = subAirFroz.visible;
+        }
+
+        // --- SCÈNE AIR MODÈLE 2 : BOÎTE À CONVECTION ---
+        let airCandleLit = false;
+        const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.22, roughness: 0.1, depthWrite: false });
+        const airBoxMesh = new THREE.Mesh(new THREE.BoxGeometry(7.2, 3.0, 2.8), glassMat);
+        airBoxMesh.position.set(-0.4, -1.5, 0);
+        groupAirBox.add(airBoxMesh);
+        airBoxMesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(7.2, 3.0, 2.8)), new THREE.LineBasicMaterial({ color: 0x94a3b8 })));
+
+        const chimGeo = new THREE.CylinderGeometry(0.6, 0.6, 2.1, 28, 1, true);
+        const chimLeft = new THREE.Mesh(chimGeo, glassMat);
+        chimLeft.position.set(-2.6, 1.05, 0);
+        groupAirBox.add(chimLeft);
+
+        const chimRight = new THREE.Mesh(chimGeo, glassMat);
+        chimRight.position.set(1.8, 1.05, 0);
+        groupAirBox.add(chimRight);
+
+        const candleMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.85, 20), new THREE.MeshPhongMaterial({ color: 0xfef3c7 }));
+        candleMesh.position.set(-2.6, -2.55, 0);
+        groupAirBox.add(candleMesh);
+
+        const flameMesh = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.5, 16), new THREE.MeshBasicMaterial({ color: 0xf97316 }));
+        flameMesh.position.set(-2.6, -1.85, 0);
+        flameMesh.visible = false;
+        groupAirBox.add(flameMesh);
+
+        const incStickAir = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.4, 12), stickMat);
+        incStickAir.position.set(2.9, 2.35, 0);
+        incStickAir.rotation.z = Math.PI / 2;
+        groupAirBox.add(incStickAir);
+
+        const incTipAir = new THREE.Mesh(tipGeo, tipMat);
+        incTipAir.position.set(1.8, 2.35, 0);
+        groupAirBox.add(incTipAir);
+
+        const airConvParticles = [];
+        for (let i = 0; i < 140; i++) {
+            const p = new THREE.Mesh(smokeGeo, new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.8 }));
+            p.userData = { t: Math.random(), rOff: (Math.random() - 0.5) * 0.4, zOff: (Math.random() - 0.5) * 0.45 };
+            groupAirBox.add(p);
+            airConvParticles.push(p);
+        }
+
+        addLabel3D("Bougie", new THREE.Vector3(-3.8, -2.55, 0), 'air', 3);
+        addLabel3D("Encens", new THREE.Vector3(3.6, 2.4, 0), 'air', 3);
+        const lblAirLowP = addLabel3D("Basse Pression (Air ascendant)", new THREE.Vector3(-2.6, 2.75, 0), 'air', 3, 'hot');
+        const lblAirHighP = addLabel3D("Haute Pression (Air descendant)", new THREE.Vector3(1.8, 1.2, 1.3), 'air', 3, 'cold');
+        const lblAirWind = addLabel3D("⬅ Direction du vent au sol", new THREE.Vector3(-0.4, -3.4, 0), 'air', 3, 'hot');
+        lblAirLowP.visible = false;
+        lblAirHighP.visible = false;
+        lblAirWind.visible = false;
+
+        function toggleAirCandle(state) {
+            airCandleLit = state;
+            flameMesh.visible = state;
+            lblAirLowP.visible = state;
+            lblAirHighP.visible = state;
+            lblAirWind.visible = state;
+        }
+
+        // --- SCÈNE EAU MODÈLE 1 : CRISTALLISOIR ---
+        let eauWindIntensity = 0;
+        const eauTankMesh = new THREE.Mesh(new THREE.BoxGeometry(7.6, 3.0, 2.8), glassMat);
+        eauTankMesh.position.set(-0.4, -1.4, 0);
+        groupEauHorizontal.add(eauTankMesh);
+        eauTankMesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(7.6, 3.0, 2.8)), new THREE.LineBasicMaterial({ color: 0x94a3b8 })));
+
+        const eauWaterMesh = new THREE.Mesh(
+            new THREE.BoxGeometry(7.5, 2.1, 2.7),
+            new THREE.MeshPhongMaterial({ color: 0x0ea5e9, transparent: true, opacity: 0.35, depthWrite: false })
+        );
+        eauWaterMesh.position.set(-0.4, -1.85, 0);
+        groupEauHorizontal.add(eauWaterMesh);
+
+        const strawMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 2.5, 20), new THREE.MeshPhongMaterial({ color: 0xf8fafc }));
+        strawMesh.position.set(-3.95, 0.35, 0);
+        strawMesh.rotation.z = Math.PI / 3.2;
+        groupEauHorizontal.add(strawMesh);
+
+        const dyeDropMesh = new THREE.Mesh(new THREE.SphereGeometry(0.24, 20, 20), new THREE.MeshPhongMaterial({ color: 0x10b981, emissive: 0x059669, emissiveIntensity: 0.4 }));
+        dyeDropMesh.position.set(-3.4, -0.82, 0);
+        groupEauHorizontal.add(dyeDropMesh);
+
+        const eauDyeParticles = [];
+        const dyeGeo = new THREE.SphereGeometry(0.08, 8, 8);
+        const dyeMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
+        for (let i = 0; i < 280; i++) {
+            const p = new THREE.Mesh(dyeGeo, dyeMat);
+            p.userData = {
+                t: Math.random(),
+                side: Math.random() < 0.5 ? 1 : -1,
+                lateralDist: 0.5 + Math.random() * 0.7,
+                yJitter: (Math.random() - 0.5) * 0.04,
+                zJitter: (Math.random() - 0.5) * 0.12
+            };
+            p.visible = false;
+            groupEauHorizontal.add(p);
+            eauDyeParticles.push(p);
+        }
+
+        addLabel3D("Paille (Souffle)", new THREE.Vector3(-4.5, 1.7, 0), 'eau', 2);
+        addLabel3D("Cristallisoir", new THREE.Vector3(-4.4, -0.3, 1.4), 'eau', 2);
+        addLabel3D("Colorant vert", new THREE.Vector3(-3.4, -0.45, 1.1), 'eau', 2);
+        const lblEauHighP = addLabel3D("Haute pression", new THREE.Vector3(-2.0, 0.35, 0), 'eau', 2, 'cold');
+        const lblEauLowP = addLabel3D("Basse pression", new THREE.Vector3(2.6, 0.35, 0), 'eau', 2, 'hot');
+        lblEauHighP.visible = false;
+        lblEauLowP.visible = false;
+
+        function updateEauWind(val) {
+            eauWindIntensity = parseFloat(val) / 100;
+            document.getElementById('wind-val').innerText = val + " %";
+            if (eauWindIntensity > 0.05) {
+                lblEauHighP.visible = true;
+                lblEauLowP.visible = true;
+            } else {
+                resetEauHorizontal();
+            }
+        }
+
+        function resetEauHorizontal() {
+            eauWindIntensity = 0;
+            document.getElementById('wind-slider').value = 0;
+            document.getElementById('wind-val').innerText = "0 %";
+            lblEauHighP.visible = false;
+            lblEauLowP.visible = false;
+            eauDyeParticles.forEach(p => p.visible = false);
+        }
+
+        // --- SCÈNE EAU MODÈLE 2 : COLONNES EAU CHAUDE / EAU FROIDE ---
+        let eauVerticalActive = false;
+        let eauExchangeProgress = 0;
+        const colDist = 2.6;
+        const colGeo = new THREE.CylinderGeometry(0.82, 0.82, 5.0, 32);
+
+        const leftColGlass = new THREE.Mesh(colGeo, glassMat);
+        leftColGlass.position.set(-colDist - 0.4, -0.4, 0);
+        groupEauVertical.add(leftColGlass);
+
+        const rightColGlass = new THREE.Mesh(colGeo, glassMat);
+        rightColGlass.position.set(colDist - 0.4, -0.4, 0);
+        groupEauVertical.add(rightColGlass);
+
+        const tubeGeo = new THREE.CylinderGeometry(0.26, 0.26, colDist * 2, 24);
+        tubeGeo.rotateZ(Math.PI / 2);
+        const topTubeMesh = new THREE.Mesh(tubeGeo, glassMat);
+        topTubeMesh.position.set(-0.4, 1.0, 0);
+        groupEauVertical.add(topTubeMesh);
+
+        const botTubeMesh = new THREE.Mesh(tubeGeo, glassMat);
+        botTubeMesh.position.set(-0.4, -1.8, 0);
+        groupEauVertical.add(botTubeMesh);
+
+        const halfWaterGeo = new THREE.CylinderGeometry(0.76, 0.76, 2.3, 32);
+        const colHotMat = new THREE.MeshPhongMaterial({ color: 0xef4444, transparent: true, opacity: 0.65 });
+        const colColdMat = new THREE.MeshPhongMaterial({ color: 0x3b82f6, transparent: true, opacity: 0.65 });
+
+        const leftTopWater = new THREE.Mesh(halfWaterGeo, colHotMat.clone());
+        leftTopWater.position.set(-colDist - 0.4, 0.75, 0);
+        groupEauVertical.add(leftTopWater);
+
+        const leftBotWater = new THREE.Mesh(halfWaterGeo, colHotMat.clone());
+        leftBotWater.position.set(-colDist - 0.4, -1.55, 0);
+        groupEauVertical.add(leftBotWater);
+
+        const rightTopWater = new THREE.Mesh(halfWaterGeo, colColdMat.clone());
+        rightTopWater.position.set(colDist - 0.4, 0.75, 0);
+        groupEauVertical.add(rightTopWater);
+
+        const rightBotWater = new THREE.Mesh(halfWaterGeo, colColdMat.clone());
+        rightBotWater.position.set(colDist - 0.4, -1.55, 0);
+        groupEauVertical.add(rightBotWater);
+
+        const eauHotParticles = [];
+        const eauColdParticles = [];
+        const pGeo = new THREE.SphereGeometry(0.095, 10, 10);
+        const hotPMat = new THREE.MeshBasicMaterial({ color: 0xf87171 });
+        const coldPMat = new THREE.MeshBasicMaterial({ color: 0x60a5fa });
+
+        for (let i = 0; i < 80; i++) {
+            const hp = new THREE.Mesh(pGeo, hotPMat);
+            hp.userData = { t: Math.random(), rOffset: (Math.random() - 0.5) * 0.22 };
+            hp.visible = false;
+            groupEauVertical.add(hp);
+            eauHotParticles.push(hp);
+
+            const cp = new THREE.Mesh(pGeo, coldPMat);
+            cp.userData = { t: Math.random(), rOffset: (Math.random() - 0.5) * 0.22 };
+            cp.visible = false;
+            groupEauVertical.add(cp);
+            eauColdParticles.push(cp);
+        }
+
+        addLabel3D("Eau chaude (Rouge)", new THREE.Vector3(-colDist - 1.9, -0.4, 0), 'eau', 3, 'hot');
+        addLabel3D("Eau froide (Bleue)", new THREE.Vector3(colDist + 1.0, -0.4, 0), 'eau', 3, 'cold');
+        const lblTopFlow = addLabel3D("➔ Eau chaude (moins dense)", new THREE.Vector3(-0.4, 1.7, 0), 'eau', 3, 'hot');
+        const lblBotFlow = addLabel3D("⬅ Eau froide (plus dense)", new THREE.Vector3(-0.4, -2.5, 0), 'eau', 3, 'cold');
+        lblTopFlow.visible = false;
+        lblBotFlow.visible = false;
+
+        function startEauVerticalExchange() {
+            eauVerticalActive = true;
+            lblTopFlow.visible = true;
+            lblBotFlow.visible = true;
+        }
+
+        function resetEauVertical() {
+            eauVerticalActive = false;
+            eauExchangeProgress = 0;
+            lblTopFlow.visible = false;
+            lblBotFlow.visible = false;
+            leftBotWater.material.color.setHex(0xef4444);
+            rightTopWater.material.color.setHex(0x3b82f6);
+            eauHotParticles.forEach(p => p.visible = false);
+            eauColdParticles.forEach(p => p.visible = false);
+        }
+
+        // --- BOUCLE D'ANIMATION PRINCIPALE ---
+        const cHot = new THREE.Color(0xef4444);
+        const cCold = new THREE.Color(0x38bdf8);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+
+            // Particules Modèle Air 1
+            if (currentTheme === 'air' && currentStep === 2) {
+                ambientParticles.forEach(p => {
+                    p.userData.t = (p.userData.t + 0.0055) % 1;
+                    const t = p.userData.t;
+                    let x, y;
+                    if (t < 0.35) {
+                        x = -3.6 + Math.sin(t * 15) * 0.07;
+                        y = -0.35 + (t / 0.35) * 1.1;
+                    } else if (t < 0.65) {
+                        const k = (t - 0.35) / 0.30;
+                        x = -3.6 + p.userData.side * (k * 1.8);
+                        y = 0.75 + k * 0.25;
+                    } else {
+                        const k = (t - 0.65) / 0.35;
+                        x = -3.6 + p.userData.side * (1.8 + k * 0.35);
+                        y = 1.0 + k * 1.6;
+                    }
+                    p.position.set(x, y, p.userData.zOff);
+                });
+
+                frozenParticles.forEach(p => {
+                    p.userData.t = (p.userData.t + 0.0055) % 1;
+                    const t = p.userData.t;
+                    let x, y;
+                    if (t < 0.30) {
+                        x = 2.8 + Math.sin(t * 15) * 0.06;
+                        y = -0.35 + (t / 0.30) * 1.05;
+                    } else {
+                        const k = (t - 0.30) / 0.70;
+                        x = 2.8 + p.userData.side * (k * 2.2);
+                        y = 0.70 - (k * k) * 2.7;
+                    }
+                    p.position.set(x, y, p.userData.zOff);
+                });
+            }
+
+            // Particules Modèle Air 2 (Boîte à vent)
+            if (currentTheme === 'air' && currentStep === 3) {
+                if (airCandleLit) flameMesh.scale.y = 0.9 + Math.sin(Date.now() * 0.02) * 0.15;
+                airConvParticles.forEach(p => {
+                    p.userData.t = (p.userData.t + 0.0045) % 1;
+                    const t = p.userData.t;
+                    if (!airCandleLit) {
+                        p.position.set(1.8 + Math.sin(t * 8 + p.userData.rOff * 5) * 0.22, 2.35 + t * 1.4, p.userData.zOff);
+                        p.material.color.setHex(0xcbd5e1);
+                    } else {
+                        let x, y;
+                        if (t < 0.30) {
+                            const k = t / 0.30;
+                            x = 1.8 + p.userData.rOff * 0.45;
+                            y = 2.35 - k * 4.5;
+                            p.material.color.copy(cCold);
+                        } else if (t < 0.65) {
+                            const k = (t - 0.30) / 0.35;
+                            x = 1.8 - k * 4.4;
+                            y = -2.15 + Math.sin(k * Math.PI) * 0.2 + p.userData.rOff * 0.35;
+                            p.material.color.lerpColors(cCold, cHot, k);
+                        } else {
+                            const k = (t - 0.65) / 0.35;
+                            x = -2.6 + p.userData.rOff * 0.45;
+                            y = -2.15 + k * 4.9;
+                            p.material.color.copy(cHot);
+                        }
+                        p.position.set(x, y, p.userData.zOff);
+                    }
+                });
+            }
+
+            // Particules Modèle Eau 1 (Cristallisoir : colorant en surface puis dispersion sur les côtés contre la paroi du fond/droite)
+            if (currentTheme === 'eau' && currentStep === 2 && eauWindIntensity > 0.05) {
+                const speed = 0.0045 * eauWindIntensity;
+                eauDyeParticles.forEach(p => {
+                    p.visible = true;
+                    p.userData.t = (p.userData.t + speed) % 1;
+                    const t = p.userData.t;
+                    let x, y, z;
+                    if (t < 0.48) {
+                        // 1. Déplacement en surface vers la paroi droite (poussé par le vent)
+                        const k = t / 0.48;
+                        x = -3.4 + k * 6.5; // de -3.4 à +3.1
+                        y = -0.82 + p.userData.yJitter; // STRICTEMENT EN SURFACE
+                        z = p.userData.zJitter * (1 + k * 0.5);
+                    } else if (t < 0.72) {
+                        // 2. Touche la paroi du fond (droite) à x ≈ 3.1 et se disperse sur les côtés (+Z et -Z)
+                        const k = (t - 0.48) / 0.24;
+                        const angle = k * (Math.PI / 2);
+                        x = 3.1 - (1 - Math.cos(angle)) * 0.35;
+                        y = -0.82 + p.userData.yJitter; // reste en surface
+                        z = p.userData.side * Math.sin(angle) * p.userData.lateralDist;
+                    } else {
+                        // 3. Dispersion le long des côtés latéraux vers l'arrière
+                        const k = (t - 0.72) / 0.28;
+                        x = 2.75 - k * 2.8;
+                        y = -0.82 + p.userData.yJitter - k * 0.05;
+                        z = p.userData.side * (p.userData.lateralDist + Math.sin(k * Math.PI) * 0.08);
+                    }
+                    p.position.set(x, y, z);
+                });
+            }
+
+            // Particules Modèle Eau 2 (Colonnes)
+            if (currentTheme === 'eau' && currentStep === 3 && eauVerticalActive) {
+                if (eauExchangeProgress < 1) {
+                    eauExchangeProgress = Math.min(1, eauExchangeProgress + 0.003);
+                    leftBotWater.material.color.lerpColors(cHot, cCold, eauExchangeProgress);
+                    rightTopWater.material.color.lerpColors(cCold, cHot, eauExchangeProgress);
+                }
+                eauHotParticles.forEach(hp => {
+                    hp.visible = true;
+                    hp.userData.t = (hp.userData.t + 0.006) % 1;
+                    hp.position.set(-colDist - 0.4 + hp.userData.t * (colDist * 2), 1.0 + hp.userData.rOffset * 0.5, hp.userData.rOffset);
+                });
+                eauColdParticles.forEach(cp => {
+                    cp.visible = true;
+                    cp.userData.t = (cp.userData.t + 0.006) % 1;
+                    cp.position.set(colDist - 0.4 - cp.userData.t * (colDist * 2), -1.8 + cp.userData.rOffset * 0.5, cp.userData.rOffset);
+                });
+            }
+
+            updateLabels3D();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / (window.innerHeight - 60);
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight - 60);
+        });
+
+        animate();
+
+        // =========================================================================
+        // 5. MOTEUR D'ÉVALUATION CRITÉRIÉE SUR 10 POINTS (HORS LLM)
+        // =========================================================================
+        function cleanText(s) {
+            return (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        }
+
+        function evaluateActivity(theme) {
+            const nom = document.getElementById('st-nom').value.trim();
+            const prenom = document.getElementById('st-prenom').value.trim();
+            const classe = document.getElementById('st-classe').value;
+
+            if (theme === 'air') {
+                const q0 = cleanText(document.getElementById('ans-air-prob').value + " " + document.getElementById('ans-air-hyp').value);
+                const q1 = cleanText(document.getElementById('ans-air-q1').value);
+                const q2 = cleanText(document.getElementById('ans-air-q2').value);
+                const q3 = cleanText(document.getElementById('ans-air-q3').value);
+
+                const c_prob = /(comment|pourquoi|\?)/.test(q0) && /(chaleur|canicule|sable|dust|france|sahara)/.test(q0);
+                const c_hyp  = /(pense|hypothese|peut-etre|flux|vent|courant|air chaud|sud)/.test(q0);
+                const c_mod1 = /(ambiant|chaud)/.test(q1) && /(monte|haut)/.test(q1) && /(congele|froid|glace)/.test(q1) && /(descend|bas|tombe)/.test(q1);
+                const c_mod2 = /(bougie|chaud|rouge)/.test(q2) && /(monte|cheminee)/.test(q2) && /(encens|froid|bleu)/.test(q2) && /(descend|aspire)/.test(q2);
+
+                const scoreD4 = (c_prob ? 1 : 0) + (c_hyp ? 1 : 0) + (c_mod1 ? 1 : 0) + (c_mod2 ? 1 : 0);
+
+                const c_dens  = /(densite|dense)/.test(q1 + " " + q3) && /(moins dense|plus dense|leger|lourd)/.test(q1 + " " + q3);
+                const c_press = /(haute pression)/.test(q2 + " " + q3) && /(basse pression)/.test(q2 + " " + q3);
+                const c_vent  = /(vent)/.test(q2 + " " + q3) && /(haute.*basse|droite.*gauche|sud.*nord)/.test(q2 + " " + q3);
+                const c_real  = /(sahara|sable|dust|france|provence|chaleur|valid)/.test(q3) && /(car|parce que|donc|entraine|explique)/.test(q1 + " " + q2 + " " + q3);
+
+                const scoreD1 = (c_dens ? 1 : 0) + (c_press ? 1 : 0) + (c_vent ? 1 : 0) + (c_real ? 1 : 0);
+
+                const totalWords = (q0 + " " + q1 + " " + q2 + " " + q3).split(/\s+/).filter(Boolean).length;
+                const c_lang1 = totalWords >= 35 && /[.!?]/.test(document.getElementById('ans-air-q1').value + document.getElementById('ans-air-q2').value + document.getElementById('ans-air-q3').value);
+                const c_lang2 = /\b(car|donc|parce que|ainsi|en effet|par consequent|puisque|grace a|alors|cest pourquoi|de ce fait)\b/.test(q3);
+                const scoreLang = (c_lang1 ? 1 : 0) + (c_lang2 ? 1 : 0);
+
+                const scoreTotal = scoreD4 + scoreD1 + scoreLang;
+
+                const critList = [
+                    { q: "Étape 1 (D4)", desc: "Formuler le problème scientifique sur la vague de chaleur et le sable", ok: c_prob, pts: c_prob ? "1 / 1" : "0 / 1" },
+                    { q: "Étape 1 (D4)", desc: "Proposer l'hypothèse d'un flux d'air chaud venant du sud", ok: c_hyp, pts: c_hyp ? "1 / 1" : "0 / 1" },
+                    { q: "Modèle 1 (D4)", desc: "Observer la montée de la fumée sous bloc ambiant et descente sous bloc froid", ok: c_mod1, pts: c_mod1 ? "1 / 1" : "0 / 1" },
+                    { q: "Modèle 1 (D1)", desc: "Expliquer par la densité (air chaud moins dense / air froid plus dense)", ok: c_dens, pts: c_dens ? "1 / 1" : "0 / 1" },
+                    { q: "Modèle 2 (D4)", desc: "Décrire la montée de l'air chaud (bougie) et l'aspiration de l'air froid (encens)", ok: c_mod2, pts: c_mod2 ? "1 / 1" : "0 / 1" },
+                    { q: "Modèle 2 (D1)", desc: "Identifier les zones de Haute Pression et de Basse Pression", ok: c_press, pts: c_press ? "1 / 1" : "0 / 1" },
+                    { q: "Modèle 2 (D1)", desc: "Expliquer que le vent souffle de la Haute vers la Basse pression", ok: c_vent, pts: c_vent ? "1 / 1" : "0 / 1" },
+                    { q: "Réel (D1)", desc: "Valider l'hypothèse (transport du sable du Sahara vers la France)", ok: c_real, pts: c_real ? "1 / 1" : "0 / 1" },
+                    { q: "Langue (D1.1)", desc: "Phrases construites et ponctuées (majuscules, points)", ok: c_lang1, pts: c_lang1 ? "1 / 1" : "0 / 1" },
+                    { q: "Langue (D1.1)", desc: "Utiliser des connecteurs logiques (car, donc, ainsi...) dans l'explication du réel", ok: c_lang2, pts: c_lang2 ? "1 / 1" : "0 / 1" }
+                ];
+
+                return {
+                    activite: "Dynamique des masses d'air",
+                    nom, prenom, classe,
+                    scoreTotal, scoreD4, scoreD1, scoreLangue: scoreLang,
+                    critList,
+                    q1: {
+                        intitule: "Démarche Dust & Modèle 1 (Air chaud/froid)",
+                        reponse: `[Problème/Hypothèse] ${document.getElementById('ans-air-prob').value} / ${document.getElementById('ans-air-hyp').value}\n[Q1] ${document.getElementById('ans-air-q1').value}`,
+                        score: (c_prob?1:0) + (c_hyp?1:0) + (c_mod1?1.5:0) + (c_dens?1.5:0),
+                        valides: critList.filter(x => x.ok).slice(0, 4).map(x => x.desc),
+                        manquants: critList.filter(x => !x.ok).slice(0, 4).map(x => x.desc)
+                    },
+                    q2: {
+                        intitule: "Modèle 2 (Boîte à vent) & Réel Septembre 2023",
+                        reponse: `[Q2] ${document.getElementById('ans-air-q2').value}\n[Q3] ${document.getElementById('ans-air-q3').value}`,
+                        score: (c_mod2?1:0) + (c_press?1:0) + (c_vent?1:0) + (c_real?1:0) + (c_lang1?0.5:0) + (c_lang2?0.5:0),
+                        valides: critList.filter(x => x.ok).slice(4).map(x => x.desc),
+                        manquants: critList.filter(x => !x.ok).slice(4).map(x => x.desc)
+                    }
+                };
+
+            } else {
+                // Évaluation Activité EAU
+                const q0 = cleanText(document.getElementById('ans-eau-prob').value + " " + document.getElementById('ans-eau-hyp').value);
+                const q1 = cleanText(document.getElementById('ans-eau-q1').value);
+                const q2 = cleanText(document.getElementById('ans-eau-q2').value);
+                const q3 = cleanText(document.getElementById('ans-eau-q3').value);
+
+                const c1 = /(paille|souffle|air)/.test(q1) && /(colorant|eau|deplace|droite|surface)/.test(q1);
+                const c2 = /(haute pression|basse pression|pression)/.test(q1);
+                const c3 = /(vent|vents dominants|alize|ouest)/.test(q1) && /(courant|surface|ocean|entraine|pousse)/.test(q1);
+
+                const c4 = /(chaud|rouge)/.test(q2) && /(haut|superieur|monte|surface)/.test(q2);
+                const c5 = /(froid|bleu)/.test(q2) && /(bas|inferieur|descend|fond|plonge)/.test(q2);
+                const c6 = /(densite|dense)/.test(q2) && /(moins dense|plus dense|leger|lourd)/.test(q2);
+
+                verifyOceanMap();
+                const c7 = oceanMapScore >= 1;
+                const c8 = /(courant|vent|gyre|boucle)/.test(q3 + " " + q0) && /(dechet|plastique|henderson|ile|transporte|accumul)/.test(q3 + " " + q0);
+
+                const totalWords = (q0 + " " + q1 + " " + q2 + " " + q3).split(/\s+/).filter(Boolean).length;
+                const c_lang1 = totalWords >= 35 && /[.!?]/.test(document.getElementById('ans-eau-q1').value + document.getElementById('ans-eau-q2').value + document.getElementById('ans-eau-q3').value);
+                const c_lang2 = /\b(car|donc|parce que|ainsi|en effet|par consequent|puisque|grace a|alors|cest pourquoi|de ce fait)\b/.test(q3);
+
+                const scoreD4 = (c1 ? 1 : 0) + (c2 ? 0.5 : 0) + (c4 ? 0.75 : 0) + (c5 ? 0.75 : 0) + oceanMapScore;
+                const scoreD1 = (c3 ? 1.5 : 0) + (c6 ? 1.5 : 0) + (c8 ? 1.0 : 0);
+                const scoreLang = (c_lang1 ? 1 : 0) + (c_lang2 ? 1 : 0);
+                const scoreTotal = Math.min(10, Math.round((scoreD4 + scoreD1 + scoreLang) * 100) / 100);
+
+                const critList = [
+                    { q: "Modèle 1 (D4)", desc: "Décrire l'action du souffle sur le colorant et l'eau de surface", ok: c1, pts: c1 ? "1 / 1" : "0 / 1" },
+                    { q: "Modèle 1 (D4)", desc: "Mentionner les zones de haute et basse pression créées par le souffle", ok: c2, pts: c2 ? "0.5 / 0.5" : "0 / 0.5" },
+                    { q: "Modèle 1 (D1)", desc: "Expliquer que les vents dominants entraînent les courants de surface", ok: c3, pts: c3 ? "1.5 / 1.5" : "0 / 1.5" },
+                    { q: "Modèle 2 (D4)", desc: "Décrire le passage de l'eau chaude en haut et de l'eau froide en bas", ok: (c4 && c5), pts: ((c4?0.75:0)+(c5?0.75:0)) + " / 1.5" },
+                    { q: "Modèle 2 (D1)", desc: "Expliquer par la densité (eau chaude moins dense / eau froide plus dense)", ok: c6, pts: c6 ? "1.5 / 1.5" : "0 / 1.5" },
+                    { q: "Carte (D4)", desc: "Tracer correctement au moins 4 flèches de courants sur l'Atlantique", ok: c7, pts: oceanMapScore + " / 1" },
+                    { q: "Réel (D1)", desc: "Expliquer le piégeage des déchets sur Henderson par les gyres océaniques", ok: c8, pts: c8 ? "1 / 1" : "0 / 1" },
+                    { q: "Langue (D1.1)", desc: "Phrases construites et ponctuées (majuscules, points)", ok: c_lang1, pts: c_lang1 ? "1 / 1" : "0 / 1" },
+                    { q: "Langue (D1.1)", desc: "Utiliser des connecteurs logiques (car, donc, ainsi...) dans l'explication du réel", ok: c_lang2, pts: c_lang2 ? "1 / 1" : "0 / 1" }
+                ];
+
+                return {
+                    activite: "Dynamique des masses d'eau (Île Henderson)",
+                    nom, prenom, classe,
+                    scoreTotal, scoreD4, scoreD1, scoreLangue: scoreLang,
+                    critList,
+                    q1: {
+                        intitule: "Courants de surface & Carte Atlantique",
+                        reponse: `[Problème/Hypothèse] ${document.getElementById('ans-eau-prob').value} / ${document.getElementById('ans-eau-hyp').value}\n[Q1] ${document.getElementById('ans-eau-q1').value}`,
+                        score: (c1?1:0) + (c2?0.5:0) + (c3?1.5:0) + oceanMapScore,
+                        valides: critList.filter(x => x.ok).slice(0, 3).map(x => x.desc),
+                        manquants: critList.filter(x => !x.ok).slice(0, 3).map(x => x.desc)
+                    },
+                    q2: {
+                        intitule: "Courants verticaux & Synthèse Henderson",
+                        reponse: `[Q2] ${document.getElementById('ans-eau-q2').value}\n[Q3] ${document.getElementById('ans-eau-q3').value}`,
+                        score: (c4?0.75:0) + (c5?0.75:0) + (c6?1.5:0) + (c8?1:0) + scoreLang,
+                        valides: critList.filter(x => x.ok).slice(3).map(x => x.desc),
+                        manquants: critList.filter(x => !x.ok).slice(3).map(x => x.desc)
+                    }
+                };
+            }
+        }
+
+        // =========================================================================
+        // 6. ENVOI DES RÉSULTATS VERS GOOGLE SHEETS
+        // =========================================================================
+        async function sendPayload(payload) {
+            const statusBox = document.getElementById('send-status-box');
+            const btn = document.getElementById('btn-send-work');
+
+            if (!payload.nom || !payload.prenom || !payload.classe) {
+                statusBox.className = "mt-4 p-3.5 rounded-xl text-xs bg-red-500/10 border border-red-500/30 text-red-300 block";
+                statusBox.innerHTML = "⚠️ <strong>Attention :</strong> N'oubliez pas de renseigner votre <strong>NOM, Prénom et Classe</strong> tout en haut de l'écran avant d'envoyer !";
+                return;
+            }
+
+            statusBox.className = "mt-4 p-3.5 rounded-xl text-xs bg-sky-500/10 border border-sky-500/30 text-sky-300 block";
+            statusBox.innerHTML = "⏳ Transmission de votre travail au professeur en cours...";
+            btn.disabled = true;
+
+            const url = (window.SVT_CONFIG && window.SVT_CONFIG.GOOGLE_SHEET_WEBHOOK_URL) || "COLLEZ_VOTRE_URL_APPS_SCRIPT_ICI";
+
+            if (!url || url === "COLLEZ_VOTRE_URL_APPS_SCRIPT_ICI") {
+                // Sauvegarde locale de secours
+                localStorage.setItem(`svt_copie_${payload.nom}_${Date.now()}`, JSON.stringify(payload));
+                statusBox.className = "mt-4 p-3.5 rounded-xl text-xs bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 block";
+                statusBox.innerHTML = `✅ <strong>Travail validé et enregistré pour ${payload.prenom} ${payload.nom} (${payload.classe}) !</strong><br>(Mode hors-ligne : demandez le code de déverrouillage au professeur pour afficher votre bilan).`;
+                btn.disabled = false;
+                return;
+            }
+
+            try {
+                await fetch(url, {
+                    method: "POST",
+                    mode: "no-cors",
+                    headers: { "Content-Type": "text/plain;charset=utf-8" },
+                    body: JSON.stringify(payload)
+                });
+                statusBox.className = "mt-4 p-3.5 rounded-xl text-xs bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 block";
+                statusBox.innerHTML = `✅ <strong>Réponses transmises avec succès au professeur !</strong> (${payload.prenom} ${payload.nom} - ${payload.classe}).<br>Demandez maintenant le code correction au professeur pour afficher votre grille critériée ci-dessous.`;
+            } catch (err) {
+                statusBox.className = "mt-4 p-3.5 rounded-xl text-xs bg-red-500/10 border border-red-500/30 text-red-300 block";
+                statusBox.innerHTML = "❌ Erreur réseau lors de l'envoi. Vérifiez votre connexion internet.";
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function submitActiveActivity() {
+            const data = evaluateActivity(currentTheme);
+            sendPayload(data);
+        }
+
+        function submitBothActivities() {
+            const dataAir = evaluateActivity('air');
+            const dataEau = evaluateActivity('eau');
+            sendPayload({
+                nom: dataAir.nom || dataEau.nom,
+                prenom: dataAir.prenom || dataEau.prenom,
+                classe: dataAir.classe || dataEau.classe,
+                submissions: [dataAir, dataEau]
+            });
+        }
+
+        // =========================================================================
+        // 7. DÉVERROUILLAGE DU CORRIGÉ & DE LA GRILLE CRITÉRIÉE
+        // =========================================================================
+        function unlockCorrectionZone() {
+            const inputCode = document.getElementById('teacher-code-input').value.trim().toUpperCase();
+            const configCodes = (window.SVT_CONFIG && window.SVT_CONFIG.UNLOCK_CODES) || [];
+            const validCodes = ["2027", "SVT2027", "SVT2026", "AIR2026", "EAU2026", ...configCodes];
+            const errMsg = document.getElementById('unlock-err-msg');
+
+            if (inputCode === "2027" || validCodes.includes(inputCode)) {
+                if (errMsg) errMsg.classList.add('hidden');
+                displayEvaluationResults();
+                document.getElementById('correction-unlocked-zone').classList.remove('hidden');
+                // Dévoilement des réponses corrigées sous toutes les questions
+                document.querySelectorAll('.correction-box').forEach(el => el.classList.remove('hidden'));
+            } else {
+                if (errMsg) errMsg.classList.remove('hidden');
+            }
+        }
+
+        function promptUnlockCode() {
+            const code = prompt("Entrez le code enseignant pour afficher les corrections :");
+            if (code) {
+                const input = document.getElementById('teacher-code-input');
+                if (input) input.value = code;
+                unlockCorrectionZone();
+            }
+        }
+
+        function displayEvaluationResults() {
+            const res = evaluateActivity(currentTheme);
+            document.getElementById('res-score-total').innerText = `${res.scoreTotal} / 10`;
+            document.getElementById('res-score-d4').innerText = `${res.scoreD4} / 4`;
+            document.getElementById('res-score-d1').innerText = `${res.scoreD1} / 4`;
+            document.getElementById('res-score-lang').innerText = `${res.scoreLangue} / 2`;
+
+            const badge = document.getElementById('badge-mastery-level');
+            const pct = (res.scoreTotal / 10) * 100;
+            if (pct >= 80) {
+                badge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40";
+                badge.innerText = "🟢 Très satisfaisant (TBM)";
+            } else if (pct >= 55) {
+                badge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40";
+                badge.innerText = "🔵 Satisfaisant (MS)";
+            } else if (pct >= 35) {
+                badge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40";
+                badge.innerText = "🟠 Fragile (MF)";
+            } else {
+                badge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-red-500/20 text-red-300 border border-red-500/40";
+                badge.innerText = "🔴 Insuffisant (MI)";
+            }
+
+            const tbody = document.getElementById('criteria-table-body');
+            tbody.innerHTML = res.critList.map(c => `
+                <tr class="hover:bg-slate-900/50">
+                    <td class="p-2.5 font-bold">${c.q}</td>
+                    <td class="p-2.5">${c.desc}</td>
+                    <td class="p-2.5 text-center ${c.ok ? 'crit-ok' : 'crit-ko'}">${c.ok ? '✔ Validé' : '✖ À retravailler'}</td>
+                    <td class="p-2.5 text-right font-semibold">${c.pts}</td>
+                </tr>
+            `).join('');
+
+            // Contenu du corrigé
+            const corrDiv = document.getElementById('corrige-content');
+            if (currentTheme === 'air') {
+                corrDiv.innerHTML = `
+                    <p>• <strong>Étape 1 :</strong> <em>Problème :</em> Comment expliquer l'origine de la vague de chaleur tardive en septembre 2023 en France et le transport de sable saharien ? <em>Hypothèse :</em> On peut penser qu'un flux d'air chaud venant du sud transporte la chaleur et le sable en suspension.</p>
+                    <p>• <strong>Modèle 1 (Blocs) :</strong> La fumée s'élève sous le bloc ambiant et redescend sous le bloc froid. L'<strong>air chaud est moins dense</strong> et monte ; l'<strong>air froid est plus dense</strong> et descend.</p>
+                    <p>• <strong>Modèle 2 (Boîte à vent) :</strong> La bougie chauffe l'air qui s'élève par la cheminée gauche (<strong>Basse Pression</strong>). L'air froid descend par la cheminée droite (<strong>Haute Pression</strong>). Le <strong>vent souffle de la Haute vers la Basse pression</strong>.</p>
+                    <p>• <strong>Retour au réel :</strong> L'air brûlant du Sahara monte et soulève le sable. Le vent généré entre la dépression atlantique et l'anticyclone méditerranéen propulse ce sable et cette canicule vers la France : l'hypothèse est validée.</p>
+                `;
+            } else {
+                corrDiv.innerHTML = `
+                    <p>• <strong>Étape 1 :</strong> <em>Problème :</em> Comment expliquer l'accumulation de plastiques sur l'île Henderson alors qu'elle est isolée à plus de 5 000 km des continents ? <em>Hypothèse :</em> Les courants marins de surface transportent les déchets à travers les océans.</p>
+                    <p>• <strong>Modèle 1 (Surface) :</strong> Le souffle de la paille entraîne l'eau et le colorant. À l'échelle du globe, les <strong>vents dominants</strong> créent et orientent les <strong>courants marins de surface</strong>.</p>
+                    <p>• <strong>Modèle 2 (Colonnes) :</strong> L'<strong>eau chaude (moins dense)</strong> circule en surface vers les pôles. L'<strong>eau froide (plus dense)</strong> plonge au fond et repart vers l'équateur, formant la circulation thermohaline profonde.</p>
+                    <p>• <strong>Retour au réel :</strong> Les courants de surface forment d'immenses boucles circulaires (les <strong>gyres océaniques</strong>). Les déchets flottants d'Amérique du Sud ou d'Asie sont piégés dans ce tourbillon et s'échouent sur les plages d'Henderson.</p>
+                `;
+            }
+        }
+
+        // =========================================================================
+        // 8. FONCTION PLEIN ÉCRAN POUR LES DOCUMENTS DE L'ÎLE HENDERSON
+        // =========================================================================
+        const hendersonDocs = [
+            {
+                src: "dechets plage henderson.png",
+                title: "Plage de l'île Henderson — Pollution plastique record",
+                caption: "📸 <strong>Plage d'Henderson :</strong> Plus de 17 tonnes (environ 38 millions) de débris plastiques échoués sur cet atoll corallien pourtant strictement inhabité."
+            },
+            {
+                src: "localisation ile henderson.jpg",
+                title: "Localisation géographique et isolement extrême",
+                caption: "📍 <strong>Isolement extrême :</strong> Située au cœur du Pacifique Sud à plus de 5 000 km de tout continent habité."
+            }
+        ];
+        let currentHendersonIdx = 0;
+
+        function openHendersonFullscreen(idx) {
+            currentHendersonIdx = idx;
+            updateHendersonModal();
+            const modal = document.getElementById('henderson-modal');
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        function closeHendersonModal() {
+            const modal = document.getElementById('henderson-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function prevHendersonImage() {
+            currentHendersonIdx = (currentHendersonIdx - 1 + hendersonDocs.length) % hendersonDocs.length;
+            updateHendersonModal();
+        }
+
+        function nextHendersonImage() {
+            currentHendersonIdx = (currentHendersonIdx + 1) % hendersonDocs.length;
+            updateHendersonModal();
+        }
+
+        function updateHendersonModal() {
+            const item = hendersonDocs[currentHendersonIdx];
+            const img = document.getElementById('henderson-modal-img');
+            const title = document.getElementById('henderson-modal-title');
+            const caption = document.getElementById('henderson-modal-caption');
+            if (img) {
+                img.src = item.src;
+                img.alt = item.title;
+            }
+            if (title) {
+                title.innerHTML = `🏝️ ${item.title} <span class="text-xs text-sky-400 font-normal">(${currentHendersonIdx + 1} / ${hendersonDocs.length})</span>`;
+            }
+            if (caption) {
+                caption.innerHTML = item.caption;
+            }
+        }
+
+        function toggleBrowserFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+            }
+        }
+
+        // Navigation clavier pour le modal Henderson (Échap, Flèches)
+        document.addEventListener('keydown', (e) => {
+            const modal = document.getElementById('henderson-modal');
+            if (!modal || modal.classList.contains('hidden')) return;
+            if (e.key === 'Escape') closeHendersonModal();
+            else if (e.key === 'ArrowLeft') prevHendersonImage();
+            else if (e.key === 'ArrowRight') nextHendersonImage();
+        });
+
+        // Initialisation de la vue au chargement
+        updateViewLayout();
+    </script>
+
+    <!-- ========================================================================= -->
+    <!-- MODAL PLEIN ÉCRAN POUR LES DOCUMENTS DE L'ÎLE HENDERSON                   -->
+    <!-- ========================================================================= -->
+    <div id="henderson-modal" class="hidden fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-3 sm:p-6" onclick="if(event.target.id==='henderson-modal') closeHendersonModal()">
+        <!-- Barre de titre et d'actions -->
+        <div class="w-full max-w-5xl flex items-center justify-between mb-3 px-2">
+            <div id="henderson-modal-title" class="text-sm sm:text-base font-bold text-white flex items-center gap-2"></div>
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="toggleBrowserFullscreen()" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 flex items-center gap-1.5 transition" title="Plein écran navigateur">
+                    <span>⛶</span>
+                    <span class="hidden sm:inline">Plein écran</span>
+                </button>
+                <button type="button" onclick="closeHendersonModal()" class="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg transition flex items-center gap-1 shadow-md">
+                    <span>✕</span>
+                    <span>Fermer (Échap)</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Zone image avec navigation fléchée -->
+        <div class="relative w-full max-w-5xl flex items-center justify-center flex-1 min-h-0">
+            <button type="button" onclick="prevHendersonImage()" class="absolute left-2 sm:left-4 z-10 w-11 h-11 bg-slate-900/80 hover:bg-sky-600 text-white text-lg rounded-full flex items-center justify-center border border-slate-700 shadow-2xl transition" title="Image précédente">❮</button>
+            
+            <img id="henderson-modal-img" src="" alt="Île Henderson" class="max-h-[75vh] max-w-full rounded-2xl object-contain shadow-2xl border border-slate-700/80">
+            
+            <button type="button" onclick="nextHendersonImage()" class="absolute right-2 sm:right-4 z-10 w-11 h-11 bg-slate-900/80 hover:bg-sky-600 text-white text-lg rounded-full flex items-center justify-center border border-slate-700 shadow-2xl transition" title="Image suivante">❯</button>
+        </div>
+
+        <!-- Légende détaillée -->
+        <div id="henderson-modal-caption" class="mt-3 max-w-3xl text-center text-xs sm:text-sm text-slate-300 bg-slate-900/90 px-4 py-2.5 rounded-xl border border-slate-800 shadow-lg"></div>
+    </div>
+</body>
+</html>

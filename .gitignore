@@ -1,0 +1,24 @@
+# =============================================================================
+# SÉCURITÉ & PROTECTION DES LIENS PRIVÉS (GOOGLE APPS SCRIPT / GOOGLE SHEETS)
+# =============================================================================
+# Fichiers contenant l'URL privée du Google Sheet / Web App du professeur
+config.local.js
+*.secret.js
+*.private.js
+.env
+.env.*
+url_googlesheet.txt
+webhook_url.txt
+
+# Fichiers de travail ou brouillons locaux
+Ameliorations.odt
+Anna derivation locale.html
+
+# Fichiers système OS & éditeurs
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*~
