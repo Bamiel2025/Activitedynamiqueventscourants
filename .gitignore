@@ -14,6 +14,10 @@ webhook_url.txt
 Ameliorations.odt
 Anna derivation locale.html
 
+# Documents enseignant locaux (grilles critériées PDF)
+Grilles*.pdf
+*grilles_evaluation*.pdf
+
 # Fichiers système OS & éditeurs
 .DS_Store
 Thumbs.db

@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVT Cycle 4 - Tableau de Bord Professeur & Remédiation</title>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --border-color: #334155;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-blue: #38bdf8;
+            
+            /* Couleurs officielles des niveaux de maîtrise */
+            --tbm-color: #22c55e; /* Très satisfaisant */
+            --ms-color: #38bdf8;  /* Satisfaisant */
+            --mf-color: #f59e0b;  /* Fragile */
+            --mi-color: #ef4444;  /* Insuffisant */
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-main); min-height: 100vh; display: flex; flex-direction: column; }
+
+        /* En-tête et barre de connexion */
+        header {
+            background: var(--bg-card);
+            padding: 14px 24px;
+            border-bottom: 2px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 14px;
+        }
+        .brand { display: flex; align-items: center; gap: 12px; }
+        .brand h1 { font-size: 1.25rem; color: var(--accent-blue); font-weight: 700; }
+        .sync-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .sync-bar input[type="text"] {
+            width: 340px;
+            background: var(--bg-dark);
+            border: 1px solid #475569;
+            color: var(--text-main);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.82rem;
+        }
+        .btn {
+            background: var(--accent-blue);
+            color: #0f172a;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.83rem;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn:hover { opacity: 0.9; }
+        .btn.secondary { background: #475569; color: #fff; }
+        .btn.demo { background: #8b5cf6; color: #fff; }
+        .btn.danger { background: var(--mi-color); color: #fff; }
+
+        /* Barre de filtres et d'onglets */
+        .toolbar {
+            background: rgba(30, 41, 59, 0.7);
+            padding: 12px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .filters select, .filters input {
+            background: var(--bg-dark);
+            color: var(--text-main);
+            border: 1px solid #475569;
+            padding: 7px 11px;
+            border-radius: 6px;
+            font-size: 0.84rem;
+        }
+        .nav-tabs { display: flex; gap: 8px; }
+        .tab-btn {
+            background: #334155;
+            color: var(--text-main);
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .tab-btn.active { background: var(--accent-blue); color: #0f172a; }
+        .tab-btn.remed-tab { border: 1px solid var(--mf-color); color: #fde68a; }
+        .tab-btn.remed-tab.active { background: var(--mf-color); color: #0f172a; }
+
+        /* Contenu principal */
+        main { flex: 1; padding: 24px; max-width: 1440px; width: 100%; margin: 0 auto; }
+
+        /* Cartes KPI */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .kpi-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 18px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.25);
+        }
+        .kpi-title { font-size: 0.82rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .kpi-value { font-size: 1.8rem; font-weight: 800; margin-top: 6px; color: var(--text-main); }
+        .kpi-sub { font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; }
+
+        /* Grille de sections */
+        .section-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.25);
+        }
+        .card h2 { font-size: 1.05rem; color: var(--accent-blue); margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+
+        /* Barres de progression compétences */
+        .comp-row { margin-bottom: 14px; }
+        .comp-header { display: flex; justify-content: space-between; font-size: 0.86rem; margin-bottom: 5px; font-weight: 600; }
+        .progress-track { width: 100%; height: 12px; background: var(--bg-dark); border-radius: 6px; overflow: hidden; border: 1px solid #334155; }
+        .progress-fill { height: 100%; transition: width 0.4s ease; border-radius: 6px; }
+
+        /* Badges de niveau de maîtrise */
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.76rem;
+            font-weight: 700;
+            text-align: center;
+        }
+        .badge-tbm { background: rgba(34, 197, 94, 0.18); color: #4ade80; border: 1px solid #22c55e; }
+        .badge-ms  { background: rgba(56, 189, 248, 0.18); color: #7dd3fc; border: 1px solid #38bdf8; }
+        .badge-mf  { background: rgba(245, 158, 11, 0.18); color: #fcd34d; border: 1px solid #f59e0b; }
+        .badge-mi  { background: rgba(239, 68, 68, 0.18); color: #fca5a5; border: 1px solid #ef4444; }
+
+        /* Tableaux */
+        .table-wrapper { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { padding: 11px 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        th { background: #0f172a; color: var(--text-muted); font-weight: 600; cursor: pointer; user-select: none; }
+        tr:hover { background: rgba(255, 255, 255, 0.03); }
+
+        /* Cartes de remédiation ciblée */
+        .remediation-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+            gap: 18px;
+        }
+        .remed-card {
+            background: #0f172a;
+            border-left: 4px solid var(--mi-color);
+            border-top: 1px solid var(--border-color);
+            border-right: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .remed-card.fragile { border-left-color: var(--mf-color); }
+        .remed-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .remed-student { font-weight: 700; font-size: 0.98rem; color: #fff; }
+        .remed-list { margin-left: 18px; font-size: 0.82rem; color: #cbd5e1; line-height: 1.45; margin-bottom: 10px; }
+        .remed-action {
+            background: rgba(56, 189, 248, 0.1);
+            border: 1px dashed #0284c7;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            color: #e0f2fe;
+            line-height: 1.4;
+        }
+
+        /* Fenêtre modale détail copie élève */
+        #student-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.82);
+            backdrop-filter: blur(5px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            padding: 20px;
+        }
+        .modal-content {
+            background: var(--bg-card);
+            border: 1px solid #475569;
+            border-radius: 12px;
+            max-width: 820px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 24px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 16px; }
+        .answer-box { background: #0f172a; border: 1px solid #334155; padding: 12px; border-radius: 8px; font-size: 0.86rem; line-height: 1.45; margin: 8px 0 14px 0; color: #e2e8f0; white-space: pre-wrap; }
+
+        @media print {
+            header, .toolbar, .no-print { display: none !important; }
+            body { background: #fff; color: #000; }
+            .card, .remed-card { border: 1px solid #ccc; background: #fff; color: #000; box-shadow: none; }
+        }
+    </style>
+    <script src="config.example.js"></script>
+    <script src="config.local.js" onerror="console.info('Mode public : config.local.js non détecté.')"></script>
+</head>
+<body>
+
+<header>
+    <div class="brand">
+        <h1>📊 SVT Cycle 4 — Tableau de Bord & Remédiation</h1>
+    </div>
+    <div class="sync-bar">
+        <input type="text" id="gas-url" placeholder="Collez l'URL Google Apps Script (Web App)...">
+        <button class="btn" onclick="fetchFromGoogleSheet()">🔄 Synchroniser Google Sheet</button>
+        <label class="btn secondary" style="cursor:pointer;">
+            📂 Importer CSV/JSON
+            <input type="file" id="file-input" accept=".csv,.json" style="display:none;" onchange="importLocalFile(event)">
+        </label>
+        <a class="btn secondary" href="grilles_evaluation_criteriees_air_eau.pdf" target="_blank" style="text-decoration:none;">📋 Grilles Critériées (PDF)</a>
+        <button class="btn danger" onclick="clearAllData()">🗑️ Effacer toutes les données</button>
+    </div>
+</header>
+
+<div class="toolbar">
+    <div class="filters">
+        <select id="filter-classe" onchange="renderAll()">
+            <option value="ALL">Toutes les classes</option>
+        </select>
+        <select id="filter-activite" onchange="renderAll()">
+            <option value="ALL">Toutes les activités (Eau & Air)</option>
+        </select>
+        <select id="filter-niveau" onchange="renderAll()">
+            <option value="ALL">Tous les niveaux de maîtrise</option>
+            <option value="DIFF">⚠️ Élèves à cibler (Fragile + Insuffisant)</option>
+            <option value="Insuffisant">🔴 Insuffisant (< 35%)</option>
+            <option value="Fragile">🟠 Fragile (35% - 54%)</option>
+            <option value="Satisfaisant">🔵 Satisfaisant (55% - 79%)</option>
+            <option value="Très satisfaisant">🟢 Très satisfaisant (≥ 80%)</option>
+        </select>
+        <input type="text" id="search-student" placeholder="🔍 Rechercher un nom / prénom..." oninput="renderAll()">
+    </div>
+
+    <div class="nav-tabs">
+        <button class="tab-btn active" onclick="switchView('overview')">1. Synthèse Classes & Compétences</button>
+        <button class="tab-btn" onclick="switchView('students')">2. Résultats par Élève</button>
+        <button class="tab-btn remed-tab" onclick="switchView('remediation')">🎯 3. Ciblage & Groupes de Remédiation</button>
+    </div>
+</div>
+
+<main>
+    <!-- Bandeau d'état -->
+    <div id="status-msg" style="margin-bottom: 16px; font-size: 0.85rem; color: var(--accent-blue); display: none;"></div>
+
+    <!-- KPI GLOBAUX -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-title">Copies analysées</div>
+            <div class="kpi-value" id="kpi-count">0</div>
+            <div class="kpi-sub" id="kpi-classes-sub">Aucune classe chargée</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">Moyenne Générale</div>
+            <div class="kpi-value" id="kpi-avg">0 / 10</div>
+            <div class="kpi-sub" id="kpi-avg-20">Soit 0 / 20</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">Maîtrise Satisfaisante ou +</div>
+            <div class="kpi-value" style="color: var(--tbm-color);" id="kpi-success-rate">0 %</div>
+            <div class="kpi-sub">Élèves en réussite (Satisfaisant / Très satisfaisant)</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">Élèves à accompagner</div>
+            <div class="kpi-value" style="color: var(--mi-color);" id="kpi-struggling">0</div>
+            <div class="kpi-sub">Ciblés en maîtrise Fragile ou Insuffisante</div>
+        </div>
+    </div>
+
+    <!-- ==================== VUE 1 : SYNTHÈSE PAR CLASSE & PAR COMPÉTENCE ==================== -->
+    <div id="view-overview">
+        <div class="section-grid">
+            <!-- Bilan par Compétence -->
+            <div class="card">
+                <h2>🧠 Résultats par Compétence (Socle Commun)</h2>
+                
+                <div class="comp-row">
+                    <div class="comp-header">
+                        <span>D4 — Exploiter un modèle et décrire les résultats (/ 4 pts)</span>
+                        <span id="comp-d4-val">0 %</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill" id="comp-d4-bar" style="width:0%; background: var(--accent-blue);"></div>
+                    </div>
+                </div>
+
+                <div class="comp-row">
+                    <div class="comp-header">
+                        <span>D1.3 — Expliquer un phénomène (Densité, Pression, Vent) (/ 4 pts)</span>
+                        <span id="comp-d1-val">0 %</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill" id="comp-d1-bar" style="width:0%; background: #a855f7;"></div>
+                    </div>
+                </div>
+
+                <div class="comp-row">
+                    <div class="comp-header">
+                        <span>D1.1 — Maîtrise de la langue française (Syntaxe & Rédaction) (/ 2 pts)</span>
+                        <span id="comp-lang-val">0 %</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill" id="comp-lang-bar" style="width:0%; background: var(--tbm-color);"></div>
+                    </div>
+                </div>
+
+                <hr style="border:none; border-top:1px solid var(--border-color); margin: 18px 0;">
+                <h2 style="margin-bottom: 10px;">🎯 Répartition des 4 Niveaux de Maîtrise</h2>
+                <div id="mastery-distribution"></div>
+            </div>
+
+            <!-- Comparaison par Classe -->
+            <div class="card">
+                <h2>🏫 Résultats comparés par Classe</h2>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Classe</th>
+                                <th>Effectif</th>
+                                <th>Moyenne (/10)</th>
+                                <th>D4 (Modèle)</th>
+                                <th>D1 (Explication)</th>
+                                <th>Langue</th>
+                                <th>Élèves en difficulté</th>
+                            </tr>
+                        </thead>
+                        <tbody id="class-summary-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== VUE 2 : RÉSULTATS DÉTAILLÉS PAR ÉLÈVE ==================== -->
+    <div id="view-students" style="display: none;">
+        <div class="card">
+            <h2>
+                <span>📋 Liste complète des résultats par élève</span>
+                <button class="btn secondary no-print" onclick="exportFilteredCSV()">⬇️ Exporter la sélection (CSV Pronote/Excel)</button>
+            </h2>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th onclick="sortTable('classe')">Classe ⬍</th>
+                            <th onclick="sortTable('nom')">Nom ⬍</th>
+                            <th onclick="sortTable('prenom')">Prénom ⬍</th>
+                            <th onclick="sortTable('activite')">Activité ⬍</th>
+                            <th onclick="sortTable('scoreTotal')">Score /10 ⬍</th>
+                            <th onclick="sortTable('scoreD4')">D4 (/4) ⬍</th>
+                            <th onclick="sortTable('scoreD1')">D1 (/4) ⬍</th>
+                            <th onclick="sortTable('scoreLangue')">Langue (/2) ⬍</th>
+                            <th onclick="sortTable('niveau')">Niveau de maîtrise ⬍</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="students-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== VUE 3 : CIBLAGE DES DIFFICULTÉS & REMÉDIATION ==================== -->
+    <div id="view-remediation" style="display: none;">
+        <div class="card" style="margin-bottom: 20px;">
+            <h2>
+                <span>🛠️ Groupes de besoin automatiques & Pistes de remédiation</span>
+                <button class="btn secondary no-print" onclick="window.print()">🖨️ Imprimer les fiches de remédiation</button>
+            </h2>
+            <p style="font-size: 0.86rem; color: var(--text-muted); margin-bottom: 16px;">
+                Cette vue isole automatiquement les élèves ayant un niveau <strong>Insuffisant (< 35%)</strong> ou <strong>Fragile (35% à 54%)</strong> et génère une remédiation personnalisée selon les compétences (D4, D1, Langue) et les critères précis non validés dans leurs réponses rédigées.
+            </p>
+            <div id="remediation-groups-summary" class="kpi-grid" style="margin-bottom: 10px;"></div>
+        </div>
+
+        <div id="remediation-cards-container" class="remediation-grid"></div>
+    </div>
+</main>
+
+<!-- MODALE D'INSPECTION DE LA COPIE D'UN ÉLÈVE -->
+<div id="student-modal" onclick="if(event.target===this) closeModal()">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="modal-title" style="color: var(--accent-blue);">Détail de la copie</h2>
+            <button class="btn secondary" onclick="closeModal()">✖ Fermer</button>
+        </div>
+        <div id="modal-body"></div>
+    </div>
+</div>
+
+<script>
+    // =========================================================================
+    // CONFIGURATION & ÉTAT GLOBAL
+    // =========================================================================
+    const FALLBACK_GAS_URL = "https://script.google.com/macros/s/AKfycby0QUI8Lc2y6gwRS3GrRWzJ9kYv6pAoaJyCbsVPvAl_ozOfsromNW9UJb3_nxx1vsxM/exec";
+    const _cfgDashUrl = window.SVT_CONFIG && window.SVT_CONFIG.GOOGLE_SHEET_WEBHOOK_URL;
+    const DEFAULT_WEB_APP_URL = (_cfgDashUrl && _cfgDashUrl !== "COLLEZ_VOTRE_URL_APPS_SCRIPT_ICI") ? _cfgDashUrl : FALLBACK_GAS_URL;
+    document.getElementById('gas-url').value = DEFAULT_WEB_APP_URL !== "COLLEZ_VOTRE_URL_APPS_SCRIPT_ICI" ? DEFAULT_WEB_APP_URL : "";
+
+    let allRecords = [];
+    let currentSort = { key: 'nom', asc: true };
+
+    // Calcul normalisé du niveau de maîtrise selon les 4 intitulés demandés
+    function computeMasteryLevel(scoreSur10) {
+        const pct = (scoreSur10 / 10) * 100;
+        if (pct >= 80) return "Très satisfaisant";
+        if (pct >= 55) return "Satisfaisant";
+        if (pct >= 35) return "Fragile";
+        return "Insuffisant";
+    }
+
+    function getBadgeHTML(niveau) {
+        if (niveau === "Très satisfaisant") return `<span class="badge badge-tbm">🟢 Très satisfaisant</span>`;
+        if (niveau === "Satisfaisant") return `<span class="badge badge-ms">🔵 Satisfaisant</span>`;
+        if (niveau === "Fragile") return `<span class="badge badge-mf">🟠 Fragile</span>`;
+        return `<span class="badge badge-mi">🔴 Insuffisant</span>`;
+    }
+
+    // =========================================================================
+    // 1. CHARGEMENT DES DONNÉES (GOOGLE SHEETS / CSV / DÉMO)
+    // =========================================================================
+    async function fetchFromGoogleSheet() {
+        const url = document.getElementById('gas-url').value.trim();
+        const msg = document.getElementById('status-msg');
+        if (!url) {
+            alert("Veuillez coller l'URL de déploiement de votre script Google Apps Script (Web App).");
+            return;
+        }
+        msg.style.display = "block";
+        msg.innerText = "⏳ Récupération des copies depuis Google Sheets en cours...";
+
+        try {
+            const response = await fetch(url);
+            const json = await response.json();
+            if (json.status === "success" && Array.isArray(json.records) && json.records.length > 0) {
+                allRecords = json.records.map(normalizeRecord);
+                populateFilters();
+                renderAll();
+                msg.innerText = `✅ ${allRecords.length} copie(s) synchronisée(s) avec succès depuis Google Sheets.`;
+            } else if (json.status === "empty" || (Array.isArray(json.records) && json.records.length === 0)) {
+                allRecords = [];
+                populateFilters();
+                renderAll();
+                msg.innerText = "ℹ️ Connexion réussie au Google Sheet : Aucune copie d'élève n'a encore été envoyée.";
+            } else {
+                msg.innerText = "⚠️ Le Google Sheet est vide ou ne contient pas encore d'onglet 'Reponses_Brutes'.";
+            }
+        } catch (err) {
+            msg.innerText = "❌ Impossible de joindre l'URL Google Apps Script. Vérifiez votre connexion et l'accès 'Tout le monde'.";
+        }
+    }
+
+    function normalizeRecord(raw) {
+        // Compatible à la fois avec les colonnes du Sheet et le JSON complet
+        let fullJson = null;
+        if (typeof raw.JSON_Complet_Pour_App === 'string' && raw.JSON_Complet_Pour_App.trim().startsWith('{')) {
+            try { fullJson = JSON.parse(raw.JSON_Complet_Pour_App); } catch (e) {}
+        }
+
+        const scoreTotal = Number(raw.Score_Total_Sur_10 ?? raw.scoreTotal ?? fullJson?.scoreTotal ?? 0);
+        const scoreD4 = Number(raw.Score_D4_Modelisation_Sur_4 ?? raw.scoreD4 ?? fullJson?.scoreD4 ?? 0);
+        const scoreD1 = Number(raw.Score_D1_Explication_Sur_4 ?? raw.scoreD1 ?? fullJson?.scoreD1 ?? 0);
+        const scoreLangue = Number(raw.Score_Langue_Sur_2 ?? raw.scoreLangue ?? fullJson?.scoreLangue ?? 0);
+
+        const q1Manquants = typeof raw.Q1_Criteres_Manquants === 'string'
+            ? raw.Q1_Criteres_Manquants.split(" | ").filter(Boolean)
+            : (raw.q1?.manquants || fullJson?.q1?.manquants || []);
+        const q2Manquants = typeof raw.Q2_Criteres_Manquants === 'string'
+            ? raw.Q2_Criteres_Manquants.split(" | ").filter(Boolean)
+            : (raw.q2?.manquants || fullJson?.q2?.manquants || []);
+
+        const q1Valides = typeof raw.Q1_Criteres_Valides === 'string'
+            ? raw.Q1_Criteres_Valides.split(" | ").filter(Boolean)
+            : (raw.q1?.valides || fullJson?.q1?.valides || []);
+        const q2Valides = typeof raw.Q2_Criteres_Valides === 'string'
+            ? raw.Q2_Criteres_Valides.split(" | ").filter(Boolean)
+            : (raw.q2?.valides || fullJson?.q2?.valides || []);
+
+        const erreursFromCol = typeof raw.Erreurs_Detectees === 'string'
+            ? raw.Erreurs_Detectees.split(" | ").filter(Boolean)
+            : (Array.isArray(raw.erreursDetectees) ? raw.erreursDetectees : []);
+        const erreursDetectees = (fullJson && Array.isArray(fullJson.erreursDetectees) && fullJson.erreursDetectees.length)
+            ? fullJson.erreursDetectees
+            : (erreursFromCol.length ? erreursFromCol : [...q1Manquants, ...q2Manquants]);
+
+        const conseilsProgression = (fullJson && Array.isArray(fullJson.conseilsProgression))
+            ? fullJson.conseilsProgression
+            : (Array.isArray(raw.conseilsProgression) ? raw.conseilsProgression : []);
+
+        const atelierRemediation = fullJson?.atelierRemediation
+            || raw.atelierRemediation
+            || (typeof raw.Pistes_Remediation === 'string' ? raw.Pistes_Remediation.split(" | ")[0] : "")
+            || "";
+
+        return {
+            horodatage: raw.Horodatage || new Date().toLocaleDateString('fr-FR'),
+            classe: (raw.Classe || raw.classe || "Non_defini").toString().trim().toUpperCase(),
+            nom: (raw.Nom || raw.nom || "INCONNU").toString().trim().toUpperCase(),
+            prenom: (raw.Prenom || raw.prenom || "Élève").toString().trim(),
+            activite: raw.Activite || raw.activite || "Dynamique des masses d'eau",
+            scoreTotal,
+            scoreD4,
+            scoreD1,
+            scoreLangue,
+            niveau: computeMasteryLevel(scoreTotal),
+            q1Reponse: raw.Q1_Reponse_Eleve || raw.q1?.reponse || "",
+            q1Score: Number(raw.Q1_Score_Sur_5 ?? raw.q1?.score ?? 0),
+            q1Valides,
+            q1Manquants,
+            q2Reponse: raw.Q2_Reponse_Eleve || raw.q2?.reponse || "",
+            q2Score: Number(raw.Q2_Score_Sur_5 ?? raw.q2?.score ?? 0),
+            q2Valides,
+            q2Manquants,
+            erreursDetectees,
+            conseilsProgression,
+            atelierRemediation
+        };
+    }
+
+    function importLocalFile(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const content = e.target.result;
+            if (file.name.endsWith('.json')) {
+                const parsed = JSON.parse(content);
+                const arr = Array.isArray(parsed) ? parsed : (parsed.records || []);
+                allRecords = arr.map(normalizeRecord);
+            } else {
+                // Parseur CSV simple compatible avec l'export Google Sheets
+                const lines = content.split(/\r?\n/).filter(l => l.trim().length > 0);
+                const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim());
+                allRecords = lines.slice(1).map(line => {
+                    const cols = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || line.split(',');
+                    const obj = {};
+                    headers.forEach((h, idx) => {
+                        obj[h] = (cols[idx] || "").replace(/^"|"$/g, '');
+                    });
+                    return normalizeRecord(obj);
+                });
+            }
+            populateFilters();
+            renderAll();
+        };
+        reader.readAsText(file);
+    }
+
+    const defaultClasses = ["4EME1", "4EME2", "4EME3", "4EME4", "4EME5", "4EME6", "4EME7"];
+
+    function populateFilters() {
+        const classSelect = document.getElementById('filter-classe');
+        const actSelect = document.getElementById('filter-activite');
+        const recorded = [...new Set(allRecords.map(r => r.classe).filter(Boolean))].sort();
+        const classes = recorded.length > 0 ? recorded : defaultClasses;
+        const acts = [...new Set(allRecords.map(r => r.activite).filter(Boolean))].sort();
+
+        classSelect.innerHTML = `<option value="ALL">Toutes les classes (${recorded.length > 0 ? recorded.length : classes.length})</option>` +
+            classes.map(c => {
+                const label = c.startsWith("4EME") ? c.replace("4EME", "4ème ") : c;
+                return `<option value="${c}">${label}</option>`;
+            }).join('');
+
+        actSelect.innerHTML = `<option value="ALL">Toutes les activités (${acts.length || 2})</option>` +
+            (acts.length > 0 ? acts.map(a => `<option value="${a}">${a}</option>`).join('') : '<option value="Dynamique des masses d\'eau">Dynamique des masses d\'eau</option><option value="Dynamique des masses d\'air">Dynamique des masses d\'air</option>');
+    }
+
+    // =========================================================================
+    // 2. FILTRAGE ET RENDU DES VUES
+    // =========================================================================
+    function getFilteredRecords() {
+        const fClasse = document.getElementById('filter-classe').value;
+        const fAct = document.getElementById('filter-activite').value;
+        const fNiveau = document.getElementById('filter-niveau').value;
+        const search = document.getElementById('search-student').value.trim().toLowerCase();
+
+        return allRecords.filter(r => {
+            if (fClasse !== "ALL" && r.classe !== fClasse) return false;
+            if (fAct !== "ALL" && r.activite !== fAct) return false;
+            if (fNiveau === "DIFF" && !(r.niveau === "Fragile" || r.niveau === "Insuffisant")) return false;
+            if (fNiveau !== "ALL" && fNiveau !== "DIFF" && r.niveau !== fNiveau) return false;
+            if (search && !(`${r.nom} ${r.prenom} ${r.classe}`.toLowerCase().includes(search))) return false;
+            return true;
+        });
+    }
+
+    function renderAll() {
+        const filtered = getFilteredRecords();
+        renderKPIs(filtered);
+        renderOverview(filtered);
+        renderStudentTable(filtered);
+        renderRemediation(filtered);
+    }
+
+    function renderKPIs(records) {
+        const count = records.length;
+        document.getElementById('kpi-count').innerText = count;
+
+        if (count === 0) {
+            document.getElementById('kpi-avg').innerText = "0 / 10";
+            document.getElementById('kpi-avg-20').innerText = "Soit 0 / 20";
+            document.getElementById('kpi-success-rate').innerText = "0 %";
+            document.getElementById('kpi-struggling').innerText = "0 élève";
+            document.getElementById('kpi-classes-sub').innerText = "Aucune copie chargée";
+            return;
+        }
+
+        const avg10 = records.reduce((s, r) => s + r.scoreTotal, 0) / count;
+        const successCount = records.filter(r => r.niveau === "Très satisfaisant" || r.niveau === "Satisfaisant").length;
+        const strugglingCount = records.filter(r => r.niveau === "Fragile" || r.niveau === "Insuffisant").length;
+        const classesList = [...new Set(records.map(r => r.classe))].join(", ");
+
+        document.getElementById('kpi-classes-sub').innerText = `Classes : ${classesList}`;
+        document.getElementById('kpi-avg').innerText = `${avg10.toFixed(1)} / 10`;
+        document.getElementById('kpi-avg-20').innerText = `Soit ${(avg10 * 2).toFixed(1)} / 20`;
+        document.getElementById('kpi-success-rate').innerText = `${Math.round((successCount / count) * 100)} %`;
+        document.getElementById('kpi-struggling').innerText = `${strugglingCount} élève(s)`;
+    }
+
+    function renderOverview(records) {
+        const count = records.length || 1;
+        const pctD4 = Math.round((records.reduce((s, r) => s + r.scoreD4, 0) / (count * 4)) * 100);
+        const pctD1 = Math.round((records.reduce((s, r) => s + r.scoreD1, 0) / (count * 4)) * 100);
+        const pctLang = Math.round((records.reduce((s, r) => s + r.scoreLangue, 0) / (count * 2)) * 100);
+
+        document.getElementById('comp-d4-val').innerText = `${pctD4} % de réussite`;
+        document.getElementById('comp-d4-bar').style.width = `${pctD4}%`;
+
+        document.getElementById('comp-d1-val').innerText = `${pctD1} % de réussite`;
+        document.getElementById('comp-d1-bar').style.width = `${pctD1}%`;
+
+        document.getElementById('comp-lang-val').innerText = `${pctLang} % de réussite`;
+        document.getElementById('comp-lang-bar').style.width = `${pctLang}%`;
+
+        // Répartition des 4 niveaux de maîtrise
+        const levels = ["Très satisfaisant", "Satisfaisant", "Fragile", "Insuffisant"];
+        const colors = {
+            "Très satisfaisant": "var(--tbm-color)",
+            "Satisfaisant": "var(--ms-color)",
+            "Fragile": "var(--mf-color)",
+            "Insuffisant": "var(--mi-color)"
+        };
+
+        const distHTML = levels.map(lvl => {
+            const nb = records.filter(r => r.niveau === lvl).length;
+            const pct = records.length ? Math.round((nb / records.length) * 100) : 0;
+            return `
+                <div class="comp-row" style="margin-bottom:10px;">
+                    <div class="comp-header">
+                        <span>${lvl}</span>
+                        <span>${nb} élève(s) (${pct} %)</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill" style="width:${pct}%; background:${colors[lvl]};"></div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        document.getElementById('mastery-distribution').innerHTML = distHTML;
+
+        // Tableau comparatif par classe
+        const classes = [...new Set(records.map(r => r.classe))].sort();
+        const tbody = document.getElementById('class-summary-tbody');
+        if (classes.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:24px; color:#94a3b8;">Aucune donnée de classe. Cliquez sur « 🔄 Synchroniser Google Sheet » pour importer les copies réelles.</td></tr>';
+        } else {
+            tbody.innerHTML = classes.map(cls => {
+                const sub = records.filter(r => r.classe === cls);
+                const n = sub.length;
+                const avg = (sub.reduce((s, r) => s + r.scoreTotal, 0) / n).toFixed(1);
+                const d4 = Math.round((sub.reduce((s, r) => s + r.scoreD4, 0) / (n * 4)) * 100);
+                const d1 = Math.round((sub.reduce((s, r) => s + r.scoreD1, 0) / (n * 4)) * 100);
+                const lg = Math.round((sub.reduce((s, r) => s + r.scoreLangue, 0) / (n * 2)) * 100);
+                const diff = sub.filter(r => r.niveau === "Fragile" || r.niveau === "Insuffisant").length;
+
+                return `
+                    <tr>
+                        <td><strong>${cls.startsWith("4EME") ? cls.replace("4EME", "4ème ") : cls}</strong></td>
+                        <td>${n}</td>
+                        <td><strong>${avg} / 10</strong></td>
+                        <td>${d4} %</td>
+                        <td>${d1} %</td>
+                        <td>${lg} %</td>
+                        <td><span class="badge ${diff > 0 ? 'badge-mi' : 'badge-tbm'}">${diff} à cibler</span></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+    }
+
+    function renderStudentTable(records) {
+        const sorted = [...records].sort((a, b) => {
+            const vA = a[currentSort.key];
+            const vB = b[currentSort.key];
+            if (typeof vA === 'number') return currentSort.asc ? vA - vB : vB - vA;
+            return currentSort.asc ? String(vA).localeCompare(String(vB)) : String(vB).localeCompare(String(vA));
+        });
+
+        const tbody = document.getElementById('students-tbody');
+        if (sorted.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:32px; color:#94a3b8;">Aucune copie d\'élève pour le moment. Cliquez sur « 🔄 Synchroniser Google Sheet » pour importer les copies réelles.</td></tr>';
+            window._currentSortedStudents = [];
+            return;
+        }
+
+        tbody.innerHTML = sorted.map((r, idx) => `
+            <tr>
+                <td><strong>${r.classe.startsWith("4EME") ? r.classe.replace("4EME", "4ème ") : r.classe}</strong></td>
+                <td><strong>${r.nom}</strong></td>
+                <td>${r.prenom}</td>
+                <td>${r.activite}</td>
+                <td><strong>${r.scoreTotal.toFixed(2)} / 10</strong></td>
+                <td>${r.scoreD4} / 4</td>
+                <td>${r.scoreD1} / 4</td>
+                <td>${r.scoreLangue} / 2</td>
+                <td>${getBadgeHTML(r.niveau)}</td>
+                <td><button class="btn secondary" style="padding:5px 10px; font-size:0.76rem;" onclick="inspectStudent(${idx})">👁️ Voir copie & critères</button></td>
+            </tr>
+        `).join('');
+        window._currentSortedStudents = sorted;
+    }
+
+    function sortTable(key) {
+        if (currentSort.key === key) currentSort.asc = !currentSort.asc;
+        else { currentSort.key = key; currentSort.asc = true; }
+        renderStudentTable(getFilteredRecords());
+    }
+
+    // =========================================================================
+    // 3. MOTEUR DE CIBLAGE & PROPOSITION AUTOMATIQUE DE REMÉDIATION
+    // =========================================================================
+    function buildRemediationAdvice(student) {
+        const actions = [];
+        if (student.scoreD4 < 2.5) {
+            actions.push("<strong>Atelier D4 (Observation du modèle 3D) :</strong> Reprendre la manipulation en binôme en verbalisant à l'oral l'état initial et l'état final (sens des flèches rouges/bleues, position haute ou basse) avant d'écrire.");
+        }
+        if (student.scoreD1 < 2.5) {
+            actions.push("<strong>Atelier D1 (Raisonnement causal : Densité / Pression) :</strong> Fournir une fiche d'étayage à connecteurs logiques (« <em>J'observe que... Or je sais que chaud/froid modifie la densité/pression... Donc...</em> ») pour relier le modèle au phénomène réel.");
+        }
+        if (student.scoreLangue < 1.5) {
+            actions.push("<strong>Appui Maîtrise de la langue :</strong> Utiliser des connecteurs logiques de cause et de conséquence (<em>car, donc, parce que, ainsi, par conséquent...</em>) pour structurer l'explication finale dans « Comprendre le réel ».");
+        }
+        if (actions.length === 0) {
+            actions.push("<strong>Consolidation ponctuelle :</strong> Revoir les critères précis manquants ci-dessus avec le corrigé type.");
+        }
+        return actions.join("<br>");
+    }
+
+    function renderRemediation(records) {
+        const struggling = records.filter(r => r.niveau === "Insuffisant" || r.niveau === "Fragile")
+            .sort((a, b) => a.scoreTotal - b.scoreTotal);
+
+        const grpD4 = struggling.filter(r => r.scoreD4 < 2.5).length;
+        const grpD1 = struggling.filter(r => r.scoreD1 < 2.5).length;
+        const grpLang = struggling.filter(r => r.scoreLangue < 1.5).length;
+
+        document.getElementById('remediation-groups-summary').innerHTML = `
+            <div class="kpi-card">
+                <div class="kpi-title">Groupe de besoin D4 (Modèle)</div>
+                <div class="kpi-value" style="color:var(--accent-blue);">${grpD4} élève(s)</div>
+                <div class="kpi-sub">Difficulté à décrire le résultat expérimental</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">Groupe de besoin D1 (Densité/Pression)</div>
+                <div class="kpi-value" style="color:#a855f7;">${grpD1} élève(s)</div>
+                <div class="kpi-sub">Difficulté à expliquer la cause physique</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">Groupe Maîtrise de la langue</div>
+                <div class="kpi-value" style="color:var(--mf-color);">${grpLang} élève(s)</div>
+                <div class="kpi-sub">Réponses trop brèves ou sans connecteurs</div>
+            </div>
+        `;
+
+        const container = document.getElementById('remediation-cards-container');
+        if (struggling.length === 0) {
+            container.innerHTML = `<div class="card"><p style="color:#4ade80;">🎉 Aucun élève en maîtrise Fragile ou Insuffisante sur la sélection actuelle.</p></div>`;
+            return;
+        }
+
+        container.innerHTML = struggling.map(st => {
+            const missingAll = (st.erreursDetectees && st.erreursDetectees.length) ? st.erreursDetectees : [...st.q1Manquants, ...st.q2Manquants];
+            const atelierHtml = st.atelierRemediation ? `<div style="margin-top:6px; font-size:0.78rem; color:#7dd3fc;"><strong>🛠️ Atelier orienté :</strong> ${st.atelierRemediation}</div>` : '';
+            const conseilsHtml = (st.conseilsProgression && st.conseilsProgression.length)
+                ? `<ul class="remed-list" style="color:#bae6fd; margin-top:4px;">${st.conseilsProgression.map(c => `<li>${c}</li>`).join('')}</ul>`
+                : '';
+            return `
+                <div class="remed-card ${st.niveau === 'Fragile' ? 'fragile' : ''}">
+                    <div class="remed-header">
+                        <div>
+                            <div class="remed-student">${st.nom} ${st.prenom} (${st.classe})</div>
+                            <div style="font-size:0.76rem; color:var(--text-muted);">${st.activite} • Score : <strong>${st.scoreTotal} / 10</strong> (D4: ${st.scoreD4}/4 | D1: ${st.scoreD1}/4 | Langue: ${st.scoreLangue}/2)</div>
+                        </div>
+                        ${getBadgeHTML(st.niveau)}
+                    </div>
+
+                    <div style="font-size:0.8rem; font-weight:600; color:#fca5a5; margin-bottom:4px;">❌ Erreurs, confusions & critères à retravailler :</div>
+                    <ul class="remed-list">
+                        ${missingAll.map(m => `<li>${m}</li>`).join('')}
+                    </ul>
+
+                    <div class="remed-action">
+                        💡 <strong>Remédiation proposée :</strong><br>
+                        ${buildRemediationAdvice(st)}
+                        ${atelierHtml}
+                        ${conseilsHtml}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // =========================================================================
+    // 4. INSPECTION D'UNE COPIE & NAVIGATION
+    // =========================================================================
+    function inspectStudent(idx) {
+        const st = window._currentSortedStudents[idx];
+        if (!st) return;
+        document.getElementById('modal-title').innerText = `${st.nom} ${st.prenom} (${st.classe}) — ${st.activite}`;
+        document.getElementById('modal-body').innerHTML = `
+            <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
+                ${getBadgeHTML(st.niveau)}
+                <span><strong>Score Total :</strong> ${st.scoreTotal} / 10</span>
+                <span>• <strong>D4 :</strong> ${st.scoreD4} / 4</span>
+                <span>• <strong>D1 :</strong> ${st.scoreD1} / 4</span>
+                <span>• <strong>Langue :</strong> ${st.scoreLangue} / 2</span>
+            </div>
+
+            <h3 style="color:var(--accent-blue); font-size:0.95rem;">Question 1 (${st.q1Score} / 5 pts) — Réponse rédigée de l'élève :</h3>
+            <div class="answer-box">${st.q1Reponse || "<em>Aucune réponse rédigée</em>"}</div>
+            <p style="font-size:0.8rem; color:#4ade80; margin-bottom:4px;">✔ Critères validés : ${st.q1Valides.join(" | ") || "Aucun"}</p>
+            <p style="font-size:0.8rem; color:#f87171; margin-bottom:16px;">✖ Critères manquants : ${st.q1Manquants.join(" | ") || "Aucun"}</p>
+
+            <h3 style="color:var(--accent-blue); font-size:0.95rem;">Question 2 (${st.q2Score} / 5 pts) — Réponse rédigée de l'élève :</h3>
+            <div class="answer-box">${st.q2Reponse || "<em>Aucune réponse rédigée</em>"}</div>
+            <p style="font-size:0.8rem; color:#4ade80; margin-bottom:4px;">✔ Critères validés : ${st.q2Valides.join(" | ") || "Aucun"}</p>
+            <p style="font-size:0.8rem; color:#f87171; margin-bottom:16px;">✖ Critères manquants : ${st.q2Manquants.join(" | ") || "Aucun"}</p>
+
+            <div class="remed-action">
+                💡 <strong>Diagnostic & Piste de remédiation personnalisée :</strong><br>
+                ${st.erreursDetectees && st.erreursDetectees.length ? `<ul style="margin:6px 0 8px 18px; color:#fde68a; font-size:0.82rem;">${st.erreursDetectees.map(e => `<li>${e}</li>`).join('')}</ul>` : ''}
+                ${buildRemediationAdvice(st)}
+                ${st.atelierRemediation ? `<div style="margin-top:6px; color:#7dd3fc;"><strong>🛠️ Atelier élève :</strong> ${st.atelierRemediation}</div>` : ''}
+            </div>
+        `;
+        document.getElementById('student-modal').style.display = "flex";
+    }
+
+    function closeModal() {
+        document.getElementById('student-modal').style.display = "none";
+    }
+
+    function switchView(view) {
+        const btns = document.querySelectorAll('.tab-btn');
+        btns[0].classList.toggle('active', view === 'overview');
+        btns[1].classList.toggle('active', view === 'students');
+        btns[2].classList.toggle('active', view === 'remediation');
+
+        document.getElementById('view-overview').style.display = (view === 'overview') ? 'block' : 'none';
+        document.getElementById('view-students').style.display = (view === 'students') ? 'block' : 'none';
+        document.getElementById('view-remediation').style.display = (view === 'remediation') ? 'block' : 'none';
+    }
+
+    function exportFilteredCSV() {
+        const rows = getFilteredRecords();
+        if (!rows.length) return;
+        const headers = ["Classe", "Nom", "Prenom", "Activite", "Score_Sur_10", "Note_Sur_20", "D4_Sur_4", "D1_Sur_4", "Langue_Sur_2", "Niveau_Maitrise"];
+        const csv = [
+            headers.join(";"),
+            ...rows.map(r => [
+                r.classe, r.nom, r.prenom, `"${r.activite}"`,
+                r.scoreTotal, (r.scoreTotal * 2).toFixed(1),
+                r.scoreD4, r.scoreD1, r.scoreLangue, `"${r.niveau}"`
+            ].join(";"))
+        ].join("\n");
+
+        const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "resultats_SVT_cycle4.csv";
+        a.click();
+    }
+
+    // =========================================================================
+    // 5. GESTION DES DONNÉES : EFFACER TOUTES LES DONNÉES DU TABLEAU DE BORD
+    // =========================================================================
+    function clearAllData() {
+        if (!confirm("Voulez-vous vraiment effacer toutes les données affichées du tableau de bord ?")) return;
+        allRecords = [];
+        // Effacer également les éventuelles copies stockées localement en cache
+        Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('svt_copie_')) localStorage.removeItem(key);
+        });
+        populateFilters();
+        renderAll();
+        const msg = document.getElementById('status-msg');
+        msg.style.display = "block";
+        msg.className = "status-msg";
+        msg.innerText = "🗑️ Toutes les données ont été effacées.";
+    }
+
+    // Initialisation au chargement
+    populateFilters();
+    renderAll();
+
+    // Si une URL Google Sheet est configurée, synchronisation automatique dès l'ouverture
+    if (DEFAULT_WEB_APP_URL && DEFAULT_WEB_APP_URL !== "COLLEZ_VOTRE_URL_APPS_SCRIPT_ICI") {
+        fetchFromGoogleSheet();
+    }
+</script>
+</body>
+</html>

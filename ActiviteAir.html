@@ -1,0 +1,1210 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVT Cycle 4 — La dynamique des masses d'air (Démarche d'investigation)</title>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --panel-bg: rgba(30, 41, 59, 0.94);
+            --accent-amber: #f59e0b;
+            --accent-blue: #38bdf8;
+            --accent-red: #f87171;
+            --accent-green: #22c55e;
+            --text-light: #f1f5f9;
+            --border-col: #334155;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-light); overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+
+        header {
+            background: var(--bg-card);
+            padding: 10px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            border-bottom: 2px solid var(--border-col);
+            z-index: 30;
+        }
+        .header-left { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+        h1 { font-size: 1.1rem; font-weight: 700; color: var(--accent-amber); }
+
+        .student-bar {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            background: var(--bg-dark);
+            padding: 5px 8px;
+            border-radius: 8px;
+            border: 1px solid var(--border-col);
+        }
+        .student-bar input, .student-bar select {
+            background: var(--bg-card);
+            color: #fff;
+            border: 1px solid #475569;
+            padding: 5px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+        .tab-btn {
+            background: #334155;
+            color: var(--text-light);
+            border: none;
+            padding: 7px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+        .tab-btn.active { background: var(--accent-amber); color: #0f172a; }
+        .tab-btn.bilan-tab { border: 1px solid var(--accent-blue); color: #7dd3fc; }
+        .tab-btn.bilan-tab.active { background: var(--accent-blue); color: #0f172a; }
+
+        #main-container { position: relative; flex: 1; width: 100%; height: 100%; overflow: hidden; }
+        #canvas-container { width: 100%; height: 100%; display: block; }
+
+        .full-view {
+            position: absolute;
+            inset: 0;
+            background: var(--bg-dark);
+            z-index: 20;
+            overflow-y: auto;
+            padding: 24px 20px;
+            display: none;
+        }
+        .view-container { max-width: 1080px; margin: 0 auto; }
+        .grid-2col { display: grid; grid-template-columns: 1.15fr 1fr; gap: 20px; align-items: start; }
+        @media (max-width: 900px) { .grid-2col { grid-template-columns: 1fr; } }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-col);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 18px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+        }
+        .card h2 { font-size: 1.12rem; color: var(--accent-amber); margin-bottom: 10px; }
+        .card h3 { font-size: 0.96rem; color: #7dd3fc; margin-bottom: 8px; }
+
+        .control-panel {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            width: 325px;
+            background: var(--panel-bg);
+            backdrop-filter: blur(8px);
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid #475569;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            z-index: 10;
+            display: none;
+        }
+        .control-panel h2 { font-size: 0.98rem; margin-bottom: 6px; color: #fff; }
+        .objective { font-size: 0.8rem; color: #cbd5e1; margin-bottom: 12px; line-height: 1.35; border-left: 3px solid var(--accent-amber); padding-left: 8px; }
+
+        .question-panel {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            width: 390px;
+            max-height: calc(100vh - 95px);
+            overflow-y: auto;
+            background: var(--panel-bg);
+            backdrop-filter: blur(8px);
+            padding: 18px;
+            border-radius: 12px;
+            border: 1px solid #475569;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            z-index: 10;
+            display: none;
+        }
+
+        .comp-badge {
+            display: inline-block;
+            background: rgba(245, 158, 11, 0.15);
+            color: #fcd34d;
+            border: 1px solid #d97706;
+            font-size: 0.72rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        .question-prompt { font-size: 0.84rem; color: #e2e8f0; margin-bottom: 10px; line-height: 1.45; }
+        .doc-helper {
+            background: rgba(15, 23, 42, 0.75);
+            border: 1px dashed #475569;
+            padding: 9px 11px;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            color: #cbd5e1;
+            margin-bottom: 10px;
+            line-height: 1.4;
+        }
+        textarea.student-answer {
+            width: 100%;
+            min-height: 115px;
+            background: #0f172a;
+            color: #fff;
+            border: 1px solid #475569;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            resize: vertical;
+        }
+        textarea.student-answer:focus { outline: 2px solid var(--accent-amber); border-color: transparent; }
+
+        .btn-group { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+        .action-btn {
+            flex: 1;
+            min-width: 105px;
+            padding: 9px 12px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.83rem;
+            cursor: pointer;
+            background: var(--accent-amber);
+            color: #0f172a;
+            transition: opacity 0.2s;
+        }
+        .action-btn.secondary { background: var(--accent-blue); color: #0f172a; }
+        .action-btn.reset { background: #64748b; color: #fff; }
+        .action-btn.next-step { background: var(--accent-amber); color: #0f172a; margin-top: 12px; width: 100%; }
+        .action-btn.send-btn { background: #22c55e; color: #fff; font-size: 0.98rem; padding: 14px; width: 100%; margin-top: 8px; }
+
+        .score-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 12px; margin-bottom: 16px; }
+        .score-box { background: #0f172a; border: 1px solid var(--border-col); padding: 14px; border-radius: 8px; text-align: center; }
+        .score-box .big { font-size: 1.45rem; font-weight: 800; color: var(--accent-amber); margin-top: 4px; }
+        .criteria-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.83rem; }
+        .criteria-table th, .criteria-table td { border: 1px solid var(--border-col); padding: 8px 10px; text-align: left; }
+        .criteria-table th { background: #0f172a; color: #cbd5e1; }
+        .crit-ok { color: #4ade80; font-weight: 600; }
+        .crit-ko { color: #f87171; }
+
+        .status-banner { padding: 12px 16px; border-radius: 8px; margin-top: 12px; font-size: 0.86rem; display: none; }
+        .status-banner.success { background: rgba(34, 197, 94, 0.2); border: 1px solid #22c55e; color: #bbf7d0; }
+        .status-banner.error { background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fecaca; }
+        .status-banner.warn { background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #fde68a; }
+
+        .post-send-card { border: 1px solid #22c55e; box-shadow: 0 10px 28px rgba(16, 185, 129, 0.16); }
+        .mastery-pill { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 0.76rem; font-weight: 700; }
+        .pill-tbm { background: rgba(34, 197, 94, 0.2); color: #86efac; border: 1px solid rgba(34, 197, 94, 0.5); }
+        .pill-ms  { background: rgba(56, 189, 248, 0.2); color: #7dd3fc; border: 1px solid rgba(56, 189, 248, 0.5); }
+        .pill-mf  { background: rgba(245, 158, 11, 0.2); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.5); }
+        .pill-mi  { background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.5); }
+        .diag-box { padding: 12px 14px; border-radius: 8px; margin-top: 12px; font-size: 0.83rem; line-height: 1.5; }
+        .diag-box.err { background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); color: #fde68a; }
+        .diag-box.rem { background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.35); color: #e0f2fe; }
+        .diag-box ul { margin: 6px 0 0 18px; }
+        .progress-track { width: 100%; height: 10px; background: #0f172a; border: 1px solid #334155; border-radius: 999px; overflow: hidden; margin: 8px 0 14px; }
+        .progress-fill { height: 100%; transition: width 0.4s ease; }
+        .hl-sci { background: rgba(34, 197, 94, 0.22); color: #86efac; padding: 1px 4px; border-radius: 4px; font-weight: 600; }
+        .hl-conn { background: rgba(56, 189, 248, 0.24); color: #7dd3fc; padding: 1px 4px; border-radius: 4px; text-decoration: underline; }
+        .copy-block { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 10px 12px; font-size: 0.81rem; line-height: 1.5; }
+
+        .svg-figure { width: 100%; border-radius: 8px; border: 1px solid #475569; background: #091326; margin-bottom: 10px; display: block; }
+
+        #labels-container { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+        .label-3d {
+            position: absolute;
+            background: rgba(15, 23, 42, 0.88);
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.76rem;
+            font-weight: 600;
+            border: 1px solid #64748b;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+        }
+        .label-3d.hot { border-color: var(--accent-red); color: #fca5a5; }
+        .label-3d.cold { border-color: var(--accent-blue); color: #bae6fd; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="config.example.js"></script>
+    <script src="config.local.js" onerror="void 0"></script>
+</head>
+<body>
+
+<header>
+    <div class="header-left">
+        <h1>💨 SVT Cycle 4 : La dynamique des masses d'air</h1>
+        <div class="student-bar">
+            <input type="text" id="st-nom" placeholder="NOM" style="width:105px;">
+            <input type="text" id="st-prenom" placeholder="Prénom" style="width:105px;">
+            <select id="st-classe">
+                <option value="">Classe...</option>
+                <option value="4eme1">4ème 1</option>
+                <option value="4eme2">4ème 2</option>
+                <option value="4eme3">4ème 3</option>
+                <option value="4eme4">4ème 4</option>
+                <option value="4eme5">4ème 5</option>
+                <option value="4eme6">4ème 6</option>
+                <option value="4eme7">4ème 7</option>
+                <option value="4A">4e A</option>
+                <option value="4B">4e B</option>
+                <option value="4C">4e C</option>
+                <option value="5A">5e A</option>
+                <option value="5B">5e B</option>
+                <option value="3A">3e A</option>
+            </select>
+        </div>
+    </div>
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('declenchante')">1. 🌍 Situation déclenchante</button>
+        <button class="tab-btn" onclick="switchTab('blocks')">2. 🧪 Modèle : Air chaud / Air froid</button>
+        <button class="tab-btn" onclick="switchTab('box')">3. 🔬 Modèle : Boîte à vent</button>
+        <button class="tab-btn" onclick="switchTab('reel')">4. 🗺️ Comprendre le réel</button>
+        <button class="tab-btn bilan-tab" onclick="switchTab('bilan')">5. 🔒 Bilan & Envoi</button>
+    </div>
+</header>
+
+<div id="main-container">
+    <div id="canvas-container"></div>
+    <div id="labels-container"></div>
+
+    <!-- ==================== ONGLET 1 : SITUATION DÉCLENCHANTE (DUST SEPTEMBRE 2023) ==================== -->
+    <div id="view-declenchante" class="full-view" style="display: block;">
+        <div class="view-container">
+            <div class="grid-2col">
+                <div class="card">
+                    <span class="comp-badge">Observation satellite réelle • Septembre 2023</span>
+                    <h2>🛰️ Panache de sable du Sahara (« Dust ») et vague de chaleur tardive en France</h2>
+                    
+                    <!-- Image satellite reconstituée en SVG : Panache de poussières sahariennes Afrique -> France + Anomalie thermique Sept 2023 -->
+                    <svg class="svg-figure" viewBox="0 0 600 330" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <radialGradient id="dustPlume" cx="45%" cy="60%" r="55%">
+                                <stop offset="0%" stop-color="#d97706" stop-opacity="0.88"/>
+                                <stop offset="55%" stop-color="#f59e0b" stop-opacity="0.55"/>
+                                <stop offset="100%" stop-color="#fef08a" stop-opacity="0"/>
+                            </radialGradient>
+                            <radialGradient id="heatFrance" cx="52%" cy="32%" r="30%">
+                                <stop offset="0%" stop-color="#dc2626" stop-opacity="0.75"/>
+                                <stop offset="100%" stop-color="#ef4444" stop-opacity="0"/>
+                            </radialGradient>
+                        </defs>
+                        <!-- Fond océan/satellite -->
+                        <rect width="600" height="330" fill="#071124"/>
+
+                        <!-- Afrique du Nord (Sahara) -->
+                        <path d="M 110,215 L 480,215 L 510,325 L 85,325 Z" fill="#451a03" stroke="#78350f" stroke-width="2"/>
+                        <text x="235" y="295" fill="#fde68a" font-size="15" font-weight="bold" letter-spacing="2">DÉSERT DU SAHARA (AFRIQUE)</text>
+
+                        <!-- Espagne & France -->
+                        <path d="M 165,135 L 250,135 L 245,195 L 155,195 Z" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+                        <path d="M 225,55 L 335,55 L 345,135 L 235,140 Z" fill="#1e293b" stroke="#94a3b8" stroke-width="2"/>
+                        <text x="255" y="95" fill="#ffffff" font-size="13" font-weight="bold">FRANCE</text>
+                        <text x="292" y="132" fill="#fcd34d" font-size="11" font-weight="bold">• Provence</text>
+
+                        <!-- Zone de canicule tardive sur la France -->
+                        <circle cx="285" cy="95" r="75" fill="url(#heatFrance)"/>
+
+                        <!-- Panache de poussières désertiques (Dust) remontant du Sahara vers la France -->
+                        <path d="M 170,285 Q 190,160 275,55 L 365,75 Q 335,180 350,285 Z" fill="url(#dustPlume)"/>
+                        
+                        <!-- Flèches de flux atmosphérique Sud -> Nord -->
+                        <path d="M 245,265 Q 235,175 270,85" fill="none" stroke="#fde047" stroke-width="3" stroke-dasharray="6,4"/>
+                        <polygon points="270,85 262,93 272,96" fill="#fde047"/>
+                        <path d="M 305,265 Q 295,180 315,100" fill="none" stroke="#fde047" stroke-width="3" stroke-dasharray="6,4"/>
+                        <polygon points="315,100 308,108 318,110" fill="#fde047"/>
+
+                        <!-- Légendes satellites -->
+                        <rect x="15" y="14" width="275" height="58" rx="6" fill="rgba(15,23,42,0.9)" stroke="#f59e0b"/>
+                        <text x="25" y="34" fill="#fcd34d" font-size="12" font-weight="bold">🛰️ Acquisition Satellite — Septembre 2023</text>
+                        <text x="25" y="52" fill="#e2e8f0" font-size="11">Nuage de poussières de sable (« Dust »)</text>
+                        <text x="25" y="66" fill="#fca5a5" font-size="11">Températures > 35°C en France (vague de chaleur)</text>
+                    </svg>
+
+                    <p style="font-size:0.86rem; line-height:1.5; color:#cbd5e1;">
+                        <strong>Constat météorologique (Septembre 2023) :</strong> Alors que l'automne approche, la France connaît une <strong>vague de chaleur tardive exceptionnelle</strong> (plus de 35 °C dans de nombreuses régions). Au même moment, les satellites d'observation montrent un immense panache ocre de <strong>poussières de sable du Sahara (« dust »)</strong> traversant la Méditerranée depuis l'Afrique jusqu'en Provence et sur toute la France[cite: 2].
+                    </p>
+                </div>
+
+                <div class="card">
+                    <span class="comp-badge">Compétence D4 • Formuler un problème et une hypothèse</span>
+                    <h2>❓ Étape 1 : Poser le problème et formuler une hypothèse</h2>
+                    <p class="question-prompt">
+                        En mettant en relation l'image satellite du panache de sable saharien et la météo en France en septembre 2023, <strong>formulez le problème scientifique</strong> puis <strong>proposez une hypothèse</strong> expliquant l'origine de cette vague de chaleur et du transport de sable[cite: 2].
+                    </p>
+                    <div class="doc-helper">
+                        💡 <strong>Aide à la formulation :</strong><br>
+                        • <strong>Problème :</strong> « <em>Comment expliquer l'origine de cette vague de chaleur (et la présence de sable du Sahara en France) ?</em> »<br>
+                        • <strong>Hypothèse :</strong> « <em>On peut penser que le flux atmosphérique chaud venant du sud (visualisé par le sable transporté) est à l'origine de...</em> »
+                    </div>
+                    <textarea id="ans-q0" class="student-answer" placeholder="Problème : Comment expliquer l'origine de... ?&#10;Hypothèse : On peut penser que..."></textarea>
+                    <button class="action-btn next-step" onclick="switchTab('blocks')">Passer à l'étape 2 : Tester l'hypothèse par les modèles 3D ➔</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== ONGLET 2 : MODÈLE 1 (AIR CHAUD VS AIR FROID) ==================== -->
+    <div id="panel-blocks" class="control-panel">
+        <h2>Modèle 1 : Air chaud et air froid</h2>
+        <p class="objective">On cherche à comparer le mouvement de l'air chaud à celui de l'air froid grâce à la fumée de l'encens[cite: 2].</p>
+        
+        <div class="btn-group">
+            <button class="action-btn" onclick="setBlockFilter('both')">👁️ Voir les 2</button>
+            <button class="action-btn secondary" onclick="setBlockFilter('ambient')">🌡️ Bloc ambiant</button>
+            <button class="action-btn secondary" onclick="setBlockFilter('frozen')">❄️ Bloc congelé</button>
+        </div>
+    </div>
+
+    <div id="qpanel-blocks" class="question-panel">
+        <span class="comp-badge">Compétences D4 & D1 • Modélisation 1</span>
+        <h3 style="color:var(--accent-amber); margin-bottom:6px;">Question 1 : Mouvement vertical de l'air</h3>
+        <p class="question-prompt">
+            En observant la fumée d'encens sous le <strong>bloc à température ambiante</strong> et sous le <strong>bloc congelé</strong>, <strong>décrivez les résultats du modèle et concluez</strong> sur le déplacement d'une masse d'air chaud et d'une masse d'air froid[cite: 2].
+        </p>
+        <div class="doc-helper">
+            💡 <strong>Attendus :</strong> Précisez dans quel cas la fumée <strong>monte</strong> ou <strong>descend</strong>, et expliquez ce comportement par la <strong>densité</strong> de l'air.
+        </div>
+        <textarea id="ans-q1" class="student-answer" placeholder="Sous le bloc à température ambiante, la fumée... alors que sous le bloc congelé, elle... On en conclut que l'air chaud... car il est moins dense, tandis que l'air froid..."></textarea>
+        <button class="action-btn next-step" onclick="switchTab('box')">Passer au Modèle 2 : Les échanges d'air et le vent ➔</button>
+    </div>
+
+    <!-- ==================== ONGLET 3 : MODÈLE 2 (BOÎTE À VENT / CONVECTION) ==================== -->
+    <div id="panel-box" class="control-panel">
+        <h2>Modèle 2 : Échanges air chaud / air froid</h2>
+        <p class="objective">On cherche à comprendre comment du sable du Sahara a pu être transporté jusqu'en Provence en modélisant les déplacements d'air[cite: 2].</p>
+
+        <div class="btn-group">
+            <button class="action-btn" onclick="toggleCandle(true)">🕯️ Allumer la bougie (État final)</button>
+            <button class="action-btn reset" onclick="toggleCandle(false)">🔄 Éteindre (État initial)</button>
+        </div>
+    </div>
+
+    <div id="qpanel-box" class="question-panel">
+        <span class="comp-badge">Compétences D4 & D1 • Modélisation 2</span>
+        <h3 style="color:var(--accent-amber); margin-bottom:6px;">Question 2 : Naissance du vent entre Haute et Basse pression</h3>
+        <p class="question-prompt">
+            Lorsque la bougie est allumée, <strong>décrivez le trajet de l'air chaud (rouge) et de l'air froid (bleu)</strong> dans la boîte, puis <strong>expliquez comment se forme le vent</strong> entre les zones de haute et de basse pression[cite: 2].
+        </p>
+        <div class="doc-helper">
+            🔬 <strong>Mots-clés du modèle :</strong> Bougie, Encens, Basse pression (air chaud ascendant), Haute pression (air froid descendant), Direction du vent[cite: 2].
+        </div>
+        <textarea id="ans-q2" class="student-answer" placeholder="Au-dessus de la bougie, l'air chauffé... ce qui crée une zone de... À droite, l'air plus froid descend et crée une zone de... Le vent se déplace alors de la... vers la..."></textarea>
+        <button class="action-btn next-step" onclick="switchTab('reel')">Passer à l'étape 4 : Comprendre le réel (Septembre 2023) ➔</button>
+    </div>
+
+    <!-- ==================== ONGLET 4 : COMPRENDRE LE RÉEL (CARTE SYNOPTIQUE SEPTEMBRE 2023) ==================== -->
+    <div id="view-reel" class="full-view">
+        <div class="view-container">
+            <div class="grid-2col">
+                <div class="card">
+                    <span class="comp-badge">Documents authentiques • Confrontation au réel</span>
+                    <h2>🗺️ Carte des pressions atmosphériques (Septembre 2023) et boucle de convection</h2>
+                    
+                    <!-- Carte synoptique + Coupe verticale de boucle convective -->
+                    <svg class="svg-figure" viewBox="0 0 620 330" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="620" height="330" fill="#091326"/>
+                        <line x1="310" y1="10" x2="310" y2="320" stroke="#334155" stroke-width="2"/>
+
+                        <!-- DOC A : CARTE SYNOPTIQUE SEPTEMBRE 2023 -->
+                        <text x="16" y="26" fill="#fcd34d" font-size="12.5" font-weight="bold">Doc. A : Pressions et flux d'air (Sept. 2023)</text>
+                        <!-- Afrique & Europe -->
+                        <path d="M 30,235 L 285,235 L 295,315 L 20,315 Z" fill="#451a03" stroke="#78350f"/>
+                        <text x="105" y="285" fill="#fde68a" font-size="11" font-weight="bold">SAHARA (Air chaud + Sable)</text>
+                        <path d="M 120,60 L 235,60 L 245,145 L 130,150 Z" fill="#1e293b" stroke="#94a3b8"/>
+                        <text x="155" y="102" fill="#fff" font-size="11" font-weight="bold">FRANCE</text>
+
+                        <!-- Centres d'action : Basse Pression (D) et Haute Pression (A) -->
+                        <circle cx="65" cy="145" r="26" fill="rgba(239,68,68,0.25)" stroke="#ef4444" stroke-width="2"/>
+                        <text x="57" y="143" fill="#fca5a5" font-size="15" font-weight="bold">D</text>
+                        <text x="22" y="162" fill="#fca5a5" font-size="9.5">Basse Pression</text>
+
+                        <circle cx="255" cy="185" r="28" fill="rgba(56,189,248,0.25)" stroke="#38bdf8" stroke-width="2"/>
+                        <text x="247" y="183" fill="#7dd3fc" font-size="15" font-weight="bold">A</text>
+                        <text x="215" y="202" fill="#7dd3fc" font-size="9.5">Haute Pression</text>
+
+                        <!-- Couloir de vent du Sud remontant le sable et l'air chaud -->
+                        <path d="M 165,255 Q 155,180 175,110" fill="none" stroke="#f97316" stroke-width="5"/>
+                        <polygon points="175,110 166,120 181,121" fill="#f97316"/>
+                        <text x="115" y="195" fill="#fdba74" font-size="10.5" font-weight="bold">Vent du Sud (Air chaud + Dust)</text>
+
+                        <!-- DOC B : COUPE VERTICALE DE CONVECTION ATMOSPHÉRIQUE -->
+                        <text x="325" y="26" fill="#38bdf8" font-size="12.5" font-weight="bold">Doc. B : Mécanisme du vent entre 2 zones</text>
+                        <!-- Sol -->
+                        <rect x="330" y="265" width="270" height="22" fill="#334155"/>
+                        <text x="345" y="280" fill="#fca5a5" font-size="10.5" font-weight="bold">ZONE CHAUDE (Basse Pression)</text>
+                        <text x="495" y="280" fill="#7dd3fc" font-size="10.5" font-weight="bold">Haute Pression</text>
+
+                        <!-- Ascendance rouge à gauche -->
+                        <path d="M 380,255 L 380,95" fill="none" stroke="#ef4444" stroke-width="4"/>
+                        <polygon points="380,90 373,103 387,103" fill="#ef4444"/>
+                        <text x="335" y="175" fill="#fca5a5" font-size="10">Air chaud</text>
+                        <text x="335" y="188" fill="#fca5a5" font-size="10">(moins dense)</text>
+
+                        <!-- Subsidence bleue à droite -->
+                        <path d="M 550,95 L 550,250" fill="none" stroke="#38bdf8" stroke-width="4"/>
+                        <polygon points="550,255 543,242 557,242" fill="#38bdf8"/>
+                        <text x="500" y="175" fill="#7dd3fc" font-size="10">Air froid</text>
+                        <text x="500" y="188" fill="#7dd3fc" font-size="10">(plus dense)</text>
+
+                        <!-- Vent au sol : Haute Pression -> Basse Pression -->
+                        <path d="M 535,245 L 405,245" fill="none" stroke="#fcd34d" stroke-width="4"/>
+                        <polygon points="398,245 412,238 412,252" fill="#fcd34d"/>
+                        <text x="418" y="235" fill="#fde68a" font-size="11" font-weight="bold">⬅ VENT AU SOL (HP ➔ BP)</text>
+                    </svg>
+
+                    <p style="font-size:0.84rem; line-height:1.45; color:#cbd5e1;">
+                        <strong>Analyse météorologique :</strong> En septembre 2023, une zone de <strong>Basse Pression (D)</strong> stationnée sur le proche Atlantique et une zone de <strong>Haute Pression (A)</strong> sur la Méditerranée ont créé un puissant couloir de <strong>vent du Sud</strong>. Ce vent a aspiré la masse d'air brûlant saharien (soulevant les poussières de sable par ascendance thermique) directement vers la France.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <span class="comp-badge">Compétences D1 & D4 • Retour au problème initial</span>
+                    <h2>🔎 Question 3 : Expliquer la vague de chaleur et le nuage de sable de septembre 2023</h2>
+                    <p class="question-prompt">
+                        À l'aide des résultats de vos <strong>modèles 3D</strong> et des <strong>documents A et B</strong>, expliquez comment les différences de température et de pression ont provoqué le vent ayant transporté le sable du Sahara et la vague de chaleur sur la France en septembre 2023[cite: 2].
+                    </p>
+                    <div class="doc-helper">
+                        📝 <strong>Éléments attendus pour valider votre hypothèse :</strong><br>
+                        1. Expliquer comment le sable est soulevé au Sahara (air chaud ascendant = <strong>Basse pression</strong>).<br>
+                        2. Rappeler le sens de déplacement du <strong>vent</strong> (de la <strong>Haute pression vers la Basse pression</strong>)[cite: 2].<br>
+                        3. Conclure en validant votre hypothèse sur l'origine de la vague de chaleur tardive en France.
+                    </div>
+                    <textarea id="ans-q3" class="student-answer" placeholder="Au-dessus du Sahara, l'air très chaud est moins dense et s'élève en soulevant les poussières de sable. Entre les zones de Haute Pression et de Basse Pression naît un vent du Sud qui... Mon hypothèse de départ est donc validée car..."></textarea>
+                    <button class="action-btn next-step" onclick="switchTab('bilan')">Passer à l'étape 5 : Envoyer mon travail & Voir le Bilan ➔</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== ONGLET 5 : BILAN, ENVOI EN 1 CLIC & CORRIGÉ ==================== -->
+    <div id="view-bilan" class="full-view">
+        <div class="view-container">
+            
+            <div class="card">
+                <h2>📤 Étape finale : Envoyer mes réponses au professeur</h2>
+                <p style="font-size:0.88rem; color:#cbd5e1; margin-bottom:10px;">
+                    Vérifiez que vos <strong>NOM, Prénom et Classe</strong> sont bien renseignés dans le bandeau supérieur, puis cliquez sur le bouton ci-dessous pour envoyer directement votre travail au professeur.
+                </p>
+                <button class="action-btn send-btn" id="btn-submit-student" onclick="submitToGoogleSheet()">📨 Envoyer mes réponses au professeur</button>
+                <div id="send-status" class="status-banner"></div>
+            </div>
+
+            <!-- Panneau Bilan Immédiat Élève (affiché après envoi, sans révéler le corrigé type verrouillé) -->
+            <div id="student-post-send-panel" style="display: none;"></div>
+
+            <div class="card">
+                <h2>🔐 Déverrouiller le Bilan, le Corrigé et ma Grille critériée</h2>
+                <p style="font-size:0.85rem; color:#cbd5e1; margin-bottom:10px;">
+                    Une fois votre travail envoyé, entrez le <strong>code correction</strong> donné par le professeur pour afficher votre grille d'évaluation et le bilan du cours.
+                </p>
+                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                    <input type="password" id="unlock-code-input" placeholder="Code correction..." style="background:#0f172a; border:1px solid #475569; color:#fff; padding:9px 12px; border-radius:6px;">
+                    <button class="action-btn" style="max-width:210px;" onclick="unlockCorrection()">🔓 Déverrouiller le corrigé</button>
+                    <span id="unlock-err" style="color:#f87171; font-size:0.82rem; display:none;">❌ Code incorrect. Demandez le code au professeur.</span>
+                </div>
+            </div>
+
+            <div id="locked-correction-zone" style="display: none;">
+                <div class="card">
+                    <h2>📊 Mon Évaluation par Grille Critériée</h2>
+                    <div class="score-grid">
+                        <div class="score-box"><div>Score Global</div><div class="big" id="disp-total">0 / 10</div></div>
+                        <div class="score-box"><div>D4 — Démarche & Modèles</div><div class="big" id="disp-d4">0 / 4</div></div>
+                        <div class="score-box"><div>D1 — Expliquer le réel</div><div class="big" id="disp-d1">0 / 4</div></div>
+                        <div class="score-box"><div>Maîtrise de la langue</div><div class="big" id="disp-lang">0 / 2</div></div>
+                    </div>
+
+                    <table class="criteria-table">
+                        <thead>
+                            <tr>
+                                <th>Étape & Compétence</th>
+                                <th>Critère de réussite évalué</th>
+                                <th>Statut</th>
+                                <th>Points</th>
+                            </tr>
+                        </thead>
+                        <tbody id="criteria-tbody"></tbody>
+                    </table>
+                </div>
+
+                <div class="card">
+                    <h2>✅ Corrigé complet de la démarche d'investigation</h2>
+                    <p style="font-size:0.86rem; line-height:1.55; color:#e2e8f0; margin-bottom:10px;">
+                        • <strong>1. Problème & Hypothèse (Septembre 2023) :</strong> <em>Problème :</em> Comment expliquer l'origine de la vague de chaleur tardive en France en septembre 2023 corrélée au nuage de sable saharien ? <em>Hypothèse :</em> On peut penser que le flux atmosphérique chaud venant du sud (visualisé par le sable transporté) est à l'origine de cette vague de chaleur.<br>
+                        • <strong>2. Modèle 1 (Blocs thermiques) :</strong> La fumée d'encens monte sous le bloc ambiant et redescend sous le bloc congelé[cite: 2]. On conclut que l'<strong>air chaud</strong>, <strong>moins dense</strong>, s'élève alors que l'<strong>air froid</strong>, <strong>plus dense</strong>, descend.<br>
+                        • <strong>3. Modèle 2 (Boîte à convection) :</strong> L'air chauffé par la bougie monte par la cheminée gauche en créant une <strong>Basse Pression</strong> au sol, tandis que l'air froid descend par la cheminée droite (<strong>Haute Pression</strong>)[cite: 2]. Le <strong>vent</strong> circule au sol de la Haute Pression vers la Basse Pression[cite: 2].<br>
+                        • <strong>4. Retour au réel :</strong> L'hypothèse est validée : l'air brûlant du Sahara s'élève en soulevant les poussières désertiques (« dust »), puis le vent généré entre les zones de haute et de basse pression déplace cette masse d'air chaud et ce sable du sud vers la France, provoquant la vague de chaleur.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <h2>📌 Notions essentielles à retenir (Bilan du cours)</h2>
+                    <div style="background:rgba(245,158,11,0.08); border-left:4px solid var(--accent-amber); padding:16px; border-radius:8px; line-height:1.55; font-size:0.9rem;">
+                        <p><strong>1. Mouvements verticaux et pression atmosphérique :</strong> L'<strong>air chaud</strong> est moins dense que l'air froid : il s'élève en altitude et crée au sol une zone de <strong>Basse Pression</strong> (dépression). L'<strong>air froid</strong>, plus dense, redescend vers le sol et crée une zone de <strong>Haute Pression</strong> (anticyclone).</p>
+                        <br>
+                        <p><strong>2. Naissance du vent :</strong> Le <strong>vent</strong> est un déplacement horizontal d'air qui souffle d'une zone de <strong>Haute Pression vers une zone de Basse Pression</strong>, transportant avec lui la chaleur et les particules en suspension (comme les poussières du Sahara).</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    // =========================================================================
+    // CONFIGURATION INTERNE PROFESSEUR (INVISIBLE POUR L'ÉLÈVE)
+    // =========================================================================
+    const DEFAULT_AIR_GAS_URL = "https://script.google.com/macros/s/AKfycby0QUI8Lc2y6gwRS3GrRWzJ9kYv6pAoaJyCbsVPvAl_ozOfsromNW9UJb3_nxx1vsxM/exec";
+    const _cfgAirUrl = window.SVT_CONFIG && window.SVT_CONFIG.GOOGLE_SHEET_WEBHOOK_URL;
+    const PROFESSOR_WEBHOOK_URL = (_cfgAirUrl && _cfgAirUrl !== "COLLEZ_VOTRE_URL_APPS_SCRIPT_ICI") ? _cfgAirUrl : DEFAULT_AIR_GAS_URL;
+    const TEACHER_UNLOCK_CODES = Array.from(new Set(["2027", "SVT2027", "AIR2026", "SVT2026", ...((window.SVT_CONFIG && window.SVT_CONFIG.UNLOCK_CODES) || [])]));
+
+    function normalizeText(str) {
+        return (str || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    }
+
+    function escapeHTML(str) {
+        return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
+    const CONN_PATTERNS = [
+        { label: "car", re: /\bcar\b/g },
+        { label: "donc", re: /\bdonc\b/g },
+        { label: "parce que", re: /\bparce que\b/g },
+        { label: "ainsi", re: /\bainsi\b/g },
+        { label: "en effet", re: /\ben effet\b/g },
+        { label: "par conséquent", re: /\bpar consequent\b/g },
+        { label: "puisque", re: /\bpuisque\b/g },
+        { label: "grâce à", re: /\bgrace a\b/g },
+        { label: "alors", re: /\balors\b/g },
+        { label: "c'est pourquoi", re: /\bcest pourquoi\b|\bc'est pourquoi\b/g },
+        { label: "de ce fait", re: /\bde ce fait\b/g }
+    ];
+
+    function getMasteryBadge(scoreSur10) {
+        const pct = (scoreSur10 / 10) * 100;
+        if (pct >= 80) return { code: "TBM", label: "🟢 Très satisfaisant (TBM)", pill: "pill-tbm", color: "#22c55e" };
+        if (pct >= 55) return { code: "MS", label: "🔵 Satisfaisant (MS)", pill: "pill-ms", color: "#38bdf8" };
+        if (pct >= 35) return { code: "MF", label: "🟠 Fragile (MF)", pill: "pill-mf", color: "#f59e0b" };
+        return { code: "MI", label: "🔴 Insuffisant (MI)", pill: "pill-mi", color: "#ef4444" };
+    }
+
+    function highlightAirCopy(rawSections) {
+        const sciWords = ["haute pression", "basse pression", "moins dense", "plus dense", "densite", "air chaud", "air froid", "sahara", "sable", "france", "canicule", "chaleur", "bougie", "encens", "cheminee", "fumee", "monte", "descend", "aspire", "vent", "flux"];
+        const connWords = ["par consequent", "cest pourquoi", "c'est pourquoi", "de ce fait", "parce que", "en effet", "grace a", "puisque", "ainsi", "alors", "donc", "car"];
+        const highlightOne = (raw) => {
+            if (!raw || !raw.trim()) return '<em style="color:#64748b">(aucune réponse saisie)</em>';
+            return raw.split(/(\s+|[.,;:!?()'’"\-])/).map(tok => {
+                const ct = normalizeText(tok).trim();
+                if (!ct) return escapeHTML(tok);
+                if (connWords.some(c => normalizeText(c) === ct)) return `<span class="hl-conn">${escapeHTML(tok)}</span>`;
+                if (sciWords.some(s => s.split(/\s+/).includes(ct) && ct.length > 2)) return `<span class="hl-sci">${escapeHTML(tok)}</span>`;
+                return escapeHTML(tok);
+            }).join('');
+        };
+        return rawSections.map(s => `<div class="copy-block" style="margin-top:8px;"><div style="font-size:0.74rem;color:#94a3b8;font-weight:700;margin-bottom:4px;">${escapeHTML(s.label)}</div><div>${highlightOne(s.text)}</div></div>`).join('');
+    }
+
+    // =========================================================================
+    // MOTEUR D'ÉVALUATION CRITÉRIÉ HORS-LLM (SUR 10 POINTS)
+    // =========================================================================
+    function evaluateStudentWork() {
+        const rawQ0 = document.getElementById('ans-q0').value.trim();
+        const rawQ1 = document.getElementById('ans-q1').value.trim();
+        const rawQ2 = document.getElementById('ans-q2').value.trim();
+        const rawQ3 = document.getElementById('ans-q3').value.trim();
+
+        const nQ0 = normalizeText(rawQ0);
+        const nQ1 = normalizeText(rawQ1);
+        const nQ2 = normalizeText(rawQ2);
+        const nQ3 = normalizeText(rawQ3);
+        const allClean = [nQ0, nQ1, nQ2, nQ3].join(" ");
+        const allRaw = [rawQ0, rawQ1, rawQ2, rawQ3].join(" ");
+
+        // 1. Compétence D4 : Démarche & Modèles (/ 4 pts)
+        const c_prob = /(comment|pourquoi|\?)/.test(nQ0) && /(chaleur|canicule|sable|dust|france|sahara)/.test(nQ0);
+        const c_hyp  = /(pense|hypothese|peut-etre|flux|vent|courant|air chaud|sud)/.test(nQ0);
+        const c_mod1 = /(ambiant|chaud)/.test(nQ1) && /(monte|haut)/.test(nQ1) && /(congele|froid|glace)/.test(nQ1) && /(descend|bas|tombe)/.test(nQ1);
+        const c_mod2 = /(bougie|chaud|rouge)/.test(nQ2) && /(monte|cheminee)/.test(nQ2) && /(encens|froid|bleu)/.test(nQ2) && /(descend|aspire)/.test(nQ2);
+
+        const scoreD4 = (c_prob ? 1 : 0) + (c_hyp ? 1 : 0) + (c_mod1 ? 1 : 0) + (c_mod2 ? 1 : 0);
+
+        // 2. Compétence D1 : Explication physique & Retour au réel (/ 4 pts)
+        const c_dens  = /(densite|dense)/.test(nQ1 + " " + nQ3) && /(moins dense|plus dense|leger|lourd)/.test(nQ1 + " " + nQ3);
+        const c_press = /(haute pression)/.test(nQ2 + " " + nQ3) && /(basse pression)/.test(nQ2 + " " + nQ3);
+        const c_vent  = /(vent)/.test(nQ2 + " " + nQ3) && /(haute.*basse|droite.*gauche|sud.*nord)/.test(nQ2 + " " + nQ3);
+        const c_real  = /(sahara|sable|dust|france|provence|chaleur|valid)/.test(nQ3) && /(car|parce que|donc|entraine|explique)/.test(nQ1 + " " + nQ2 + " " + nQ3);
+
+        const scoreD1 = (c_dens ? 1 : 0) + (c_press ? 1 : 0) + (c_vent ? 1 : 0) + (c_real ? 1 : 0);
+
+        // 3. Maîtrise de la langue (/ 2 pts)
+        const totalWords = allClean.split(/\s+/).filter(Boolean).length;
+        const sentenceCount = allRaw.split(/[.!?]+/).map(x => x.trim()).filter(Boolean).length;
+        const connectorsFound = CONN_PATTERNS.filter(c => { c.re.lastIndex = 0; return c.re.test(nQ3); }).map(c => c.label);
+        const c_lang1 = totalWords >= 35 && /[.!?]/.test(rawQ1 + rawQ2 + rawQ3);
+        const c_lang2 = /\b(car|donc|parce que|ainsi|en effet|par consequent|puisque|grace a|alors|cest pourquoi|de ce fait)\b/.test(nQ3);
+
+        const scoreLangue = (c_lang1 ? 1 : 0) + (c_lang2 ? 1 : 0);
+        const scoreTotal = scoreD4 + scoreD1 + scoreLangue;
+        const scoreSur5 = Math.round((scoreTotal / 2) * 100) / 100;
+        const scoreSur20 = Math.round(scoreTotal * 20) / 10;
+        const mastery = getMasteryBadge(scoreTotal);
+
+        const criteriaRows = [
+            { code: "PROB", comp: "D4", q: "Étape 1 (D4)", desc: "Formuler le problème scientifique sur l'origine de la vague de chaleur et du sable", ok: c_prob, pts: c_prob ? "1 / 1" : "0 / 1", conseil: "Formule une vraie question scientifique (« Comment... ? ») reliant la chaleur/le sable saharien à la France." },
+            { code: "HYP", comp: "D4", q: "Étape 1 (D4)", desc: "Proposer l'hypothèse d'un flux atmosphérique chaud venant du sud", ok: c_hyp, pts: c_hyp ? "1 / 1" : "0 / 1", conseil: "Rédige une hypothèse (« Je pense que... ») évoquant un vent ou un flux d'air chaud venant du sud." },
+            { code: "MOD1", comp: "D4", q: "Modèle 1 (D4)", desc: "Observer que la fumée monte sous le bloc ambiant et descend sous le bloc congelé", ok: c_mod1, pts: c_mod1 ? "1 / 1" : "0 / 1", conseil: "Compare les deux blocs du Modèle 1 : où la fumée s'élève-t-elle et où redescend-elle ?" },
+            { code: "DENS", comp: "D1", q: "Modèle 1 (D1)", desc: "Expliquer le mouvement vertical par la densité (air chaud moins dense / air froid plus dense)", ok: c_dens, pts: c_dens ? "1 / 1" : "0 / 1", conseil: "Appuie-toi sur la notion de densité (« moins dense » / « plus dense ») pour expliquer les mouvements verticaux." },
+            { code: "MOD2", comp: "D4", q: "Modèle 2 (D4)", desc: "Décrire la montée de l'air chaud (bougie) et la descente de l'air froid (encens)", ok: c_mod2, pts: c_mod2 ? "1 / 1" : "0 / 1", conseil: "Décris la circulation entre les deux cheminées du Modèle 2 (bougie vs encens)." },
+            { code: "PRESS", comp: "D1", q: "Modèle 2 (D1)", desc: "Identifier les zones de Haute Pression et de Basse Pression", ok: c_press, pts: c_press ? "1 / 1" : "0 / 1", conseil: "Nomme explicitement les zones de Haute Pression et de Basse Pression dans le Modèle 2." },
+            { code: "VENT", comp: "D1", q: "Modèle 2 (D1)", desc: "Expliquer que le vent souffle de la Haute Pression vers la Basse Pression", ok: c_vent, pts: c_vent ? "1 / 1" : "0 / 1", conseil: "Indique dans quel sens se déplace le vent entre ces deux zones de pression." },
+            { code: "REAL", comp: "D1", q: "Réel (D1)", desc: "Valider l'hypothèse en expliquant le transport du sable saharien et de la chaleur vers la France", ok: c_real, pts: c_real ? "1 / 1" : "0 / 1", conseil: "Relie les mécanismes des modèles au transport réel de chaleur et de sable du Sahara vers la France." },
+            { code: "LANG1", comp: "LANG", q: "Langue (D1.1)", desc: "Phrases construites et ponctuées (majuscules, points)", ok: c_lang1, pts: c_lang1 ? "1 / 1" : "0 / 1", conseil: "Développe tes phrases avec ponctuation (vise 40+ mots au total)." },
+            { code: "LANG2", comp: "LANG", q: "Langue (D1.1)", desc: "Utiliser des connecteurs logiques (car, donc, ainsi...) dans l'explication du réel", ok: c_lang2, pts: c_lang2 ? "1 / 1" : "0 / 1", conseil: "Ajoute un connecteur logique (« car », « parce que », « donc », « ainsi ») dans l'onglet 4." }
+        ];
+
+        const erreursDetectees = [];
+        const conseilsProgression = [];
+        if (/chaud[^.?!]{0,35}(plus dense|descend|tombe|lourd)/.test(allClean)) {
+            erreursDetectees.push("Confusion chaud / froid sur la densité : vérifie le mouvement de l'air chaud dans le Modèle 1.");
+        }
+        if (/froid[^.?!]{0,35}(moins dense|monte|eleve|leger)/.test(allClean)) {
+            erreursDetectees.push("Confusion sur l'air froid : observe à nouveau le bloc congelé (Modèle 1) et l'encens (Modèle 2).");
+        }
+        if (/(de la |depuis la )?basse pression\s+(vers|va a)\s+(la\s+)?haute pression/.test(allClean) && !/(haute pression|haute)\s+vers\s+(la\s+)?basse pression/.test(allClean)) {
+            erreursDetectees.push("Inversion du sens du vent : vérifie de quelle zone de pression (Haute ou Basse) souffle le vent.");
+        }
+        criteriaRows.forEach(c => {
+            if (!c.ok) {
+                erreursDetectees.push(`Critère non validé [${c.q}] : ${c.desc}`);
+                if (c.conseil) conseilsProgression.push(c.conseil);
+            }
+        });
+        const failedD4 = criteriaRows.filter(c => !c.ok && c.comp === 'D4').length;
+        const failedD1 = criteriaRows.filter(c => !c.ok && c.comp === 'D1').length;
+        const failedLang = criteriaRows.filter(c => !c.ok && c.comp === 'LANG').length;
+        let atelierRemediation = "Défi d'approfondissement : excellente maîtrise, prêt(e) pour le schéma-bilan global.";
+        if (erreursDetectees.length > 0) {
+            if (failedD4 >= failedD1 && failedD4 > 0) atelierRemediation = "Atelier A (Démarche & Modèles - D4) : reprendre la lecture des mouvements 3D (blocs et boîte à convection).";
+            else if (failedD1 > 0) atelierRemediation = "Atelier B (Explication physique - D1) : relier température -> densité -> pression -> sens du vent et Sahara.";
+            else if (failedLang > 0) atelierRemediation = "Atelier C (Rédaction - D1.1) : rédiger des phrases complètes reliées par car / donc / ainsi.";
+        }
+        if (!conseilsProgression.length) conseilsProgression.push("Tous les critères sont validés ! Vérifie simplement l'orthographe avant de passer à l'activité Masses d'Eau.");
+
+        document.getElementById('disp-total').innerText = `${scoreTotal} / 10`;
+        document.getElementById('disp-d4').innerText = `${scoreD4} / 4`;
+        document.getElementById('disp-d1').innerText = `${scoreD1} / 4`;
+        document.getElementById('disp-lang').innerText = `${scoreLangue} / 2`;
+
+        const tbody = document.getElementById('criteria-tbody');
+        tbody.innerHTML = criteriaRows.map(r => `
+            <tr>
+                <td><strong>${r.q}</strong></td>
+                <td>${r.desc}</td>
+                <td class="${r.ok ? 'crit-ok' : 'crit-ko'}">${r.ok ? '✔ Validé' : '✖ À retravailler'}</td>
+                <td>${r.pts}</td>
+            </tr>
+        `).join('');
+
+        const q1Crit = [criteriaRows[0], criteriaRows[1], criteriaRows[2], criteriaRows[3]];
+        const q2Crit = [criteriaRows[4], criteriaRows[5], criteriaRows[6], criteriaRows[7], criteriaRows[8], criteriaRows[9]];
+
+        return {
+            activite: "Dynamique des masses d'air",
+            theme: "air",
+            nom: document.getElementById('st-nom').value.trim(),
+            prenom: document.getElementById('st-prenom').value.trim(),
+            classe: document.getElementById('st-classe').value,
+            scoreTotal, scoreSur5, scoreSur20,
+            niveauMaitrise: mastery.code,
+            scoreD4,
+            scoreD1,
+            scoreLangue,
+            wordCount: totalWords,
+            sentenceCount,
+            connectorsFound,
+            critList: criteriaRows,
+            erreursDetectees,
+            conseilsProgression: Array.from(new Set(conseilsProgression)),
+            atelierRemediation,
+            highlightedCopyHTML: highlightAirCopy([
+                { label: "1. Situation déclenchante (Problème / Hypothèse)", text: rawQ0 },
+                { label: "2. Modèle 1 (Blocs chaud/froid)", text: rawQ1 },
+                { label: "3. Modèle 2 (Boîte à vent)", text: rawQ2 },
+                { label: "4. Retour au réel (Sahara -> France)", text: rawQ3 }
+            ]),
+            q1: {
+                intitule: "Démarche : Septembre 2023 (Dust) & Modèle 1 (Air chaud/froid et densité)",
+                reponse: `[Problème/Hypothèse] ${rawQ0}\n[Modèle 1] ${rawQ1}`,
+                score: (c_prob?1:0) + (c_hyp?1:0) + (c_mod1?1.5:0) + (c_dens?1.5:0),
+                valides: q1Crit.filter(x => x.ok).map(x => x.desc),
+                manquants: q1Crit.filter(x => !x.ok).map(x => x.desc)
+            },
+            q2: {
+                intitule: "Modèle 2 (Boîte à convection) & Explication réelle (Sahara -> France)",
+                reponse: `[Modèle 2] ${rawQ2}\n[Réel Sept. 2023] ${rawQ3}`,
+                score: (c_mod2?1:0) + (c_press?1:0) + (c_vent?1:0) + (c_real?1:0) + (c_lang1?0.5:0) + (c_lang2?0.5:0),
+                valides: q2Crit.filter(x => x.ok).map(x => x.desc),
+                manquants: q2Crit.filter(x => !x.ok).map(x => x.desc)
+            }
+        };
+    }
+
+    const airAttemptHistory = {};
+    function renderStudentPostSendPanel(result) {
+        const panel = document.getElementById('student-post-send-panel');
+        if (!panel) return;
+        const key = `svt_air_attempt_${normalizeText(result.nom)}_${normalizeText(result.prenom)}_${normalizeText(result.classe)}`;
+        let prev = airAttemptHistory[key];
+        if (!prev) {
+            try { const s = localStorage.getItem(key); if (s) prev = JSON.parse(s); } catch (e) {}
+        }
+        const attemptNum = prev ? prev.attemptNum + 1 : 1;
+        const delta = prev ? Math.round((result.scoreTotal - prev.scoreTotal) * 100) / 100 : null;
+        airAttemptHistory[key] = { attemptNum, scoreTotal: result.scoreTotal };
+        try { localStorage.setItem(key, JSON.stringify(airAttemptHistory[key])); } catch (e) {}
+
+        const mastery = getMasteryBadge(result.scoreTotal);
+        const pct = Math.min(100, Math.round((result.scoreTotal / 10) * 100));
+        const deltaBadge = delta !== null
+            ? `<span class="mastery-pill pill-tbm">${delta >= 0 ? '+' : ''}${delta} pt depuis tentative ${attemptNum - 1}</span>`
+            : `<span class="mastery-pill" style="background:#1e293b;color:#cbd5e1;border:1px solid #475569;">Tentative ${attemptNum}</span>`;
+
+        const errHtml = result.erreursDetectees.length
+            ? `<ul>${result.erreursDetectees.map(e => `<li>${escapeHTML(e)}</li>`).join('')}</ul>`
+            : `<p>✅ Aucune confusion ni oubli détecté !</p>`;
+
+        const consHtml = `<ul>${result.conseilsProgression.map(c => `<li>${escapeHTML(c)}</li>`).join('')}</ul>`;
+
+        const rowsHtml = result.critList.map(r => `
+            <tr>
+                <td><strong>${escapeHTML(r.q)}</strong></td>
+                <td>${escapeHTML(r.desc)}</td>
+                <td class="${r.ok ? 'crit-ok' : 'crit-ko'}">${r.ok ? '✔ Validé' : '✖ À retravailler'}</td>
+                <td>${escapeHTML(r.pts)}</td>
+            </tr>
+        `).join('');
+
+        panel.innerHTML = `
+            <div class="card post-send-card">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+                    <h2 style="margin:0;">🎯 Ton Bilan Immédiat (avant déverrouillage du corrigé type)</h2>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        ${deltaBadge}
+                        <span class="mastery-pill ${mastery.pill}">${mastery.label}</span>
+                    </div>
+                </div>
+                <div style="font-size:0.8rem;color:#94a3b8;">Score estimé : <strong style="color:#fff;">${result.scoreTotal} / 10</strong> (${result.scoreSur20} / 20 · ${pct}%)</div>
+                <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${mastery.color};"></div></div>
+
+                <div class="score-grid">
+                    <div class="score-box"><div>Score Global</div><div class="big">${result.scoreTotal} / 10</div><div style="font-size:0.72rem;color:#94a3b8;">${result.scoreSur5} / 5</div></div>
+                    <div class="score-box"><div>D4 — Démarche</div><div class="big">${result.scoreD4} / 4</div></div>
+                    <div class="score-box"><div>D1 — Expliquer</div><div class="big">${result.scoreD1} / 4</div></div>
+                    <div class="score-box"><div>Langue (D1.1)</div><div class="big">${result.scoreLangue} / 2</div><div style="font-size:0.72rem;color:#94a3b8;">${result.wordCount} mots · ${result.connectorsFound.length} conn.</div></div>
+                </div>
+
+                <div class="diag-box err">
+                    <strong>⚠️ Erreurs, confusions ou oublis repérés :</strong>
+                    ${errHtml}
+                </div>
+
+                <div class="diag-box rem">
+                    <strong>💡 Comment progresser :</strong>
+                    ${consHtml}
+                    <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(56,189,248,0.25);">
+                        <strong>🛠️ Remédiation conseillée en classe :</strong> ${escapeHTML(result.atelierRemediation)}
+                    </div>
+                </div>
+
+                <table class="criteria-table">
+                    <thead><tr><th>Étape</th><th>Critère de réussite évalué</th><th>Statut</th><th>Points</th></tr></thead>
+                    <tbody>${rowsHtml}</tbody>
+                </table>
+
+                <div style="margin-top:14px;">
+                    <div style="font-size:0.84rem;font-weight:700;color:#e2e8f0;">🔍 Ta copie analysée (<span class="hl-sci">mots scientifiques</span> · <span class="hl-conn">connecteurs logiques</span>)</div>
+                    ${result.highlightedCopyHTML}
+                </div>
+
+                <div style="margin-top:14px;display:flex;justify-content:flex-end;">
+                    <button type="button" class="action-btn" style="max-width:340px;" onclick="switchTab('reel')">✏️ Améliorer mes réponses et renvoyer au professeur</button>
+                </div>
+            </div>
+        `;
+        panel.style.display = "block";
+        panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    // =========================================================================
+    // ENVOI DIRECT AU PROFESSEUR (SANS SAISIE D'URL PAR L'ÉLÈVE)
+    // =========================================================================
+    async function submitToGoogleSheet() {
+        const result = evaluateStudentWork();
+        const statusBanner = document.getElementById('send-status');
+        const btn = document.getElementById('btn-submit-student');
+
+        if (!result.nom || !result.prenom || !result.classe) {
+            statusBanner.className = "status-banner error";
+            statusBanner.style.display = "block";
+            statusBanner.innerText = "⚠️ N'oubliez pas de renseigner votre NOM, votre Prénom et votre Classe tout en haut de la page !";
+            return;
+        }
+
+        statusBanner.className = "status-banner success";
+        statusBanner.style.display = "block";
+        btn.disabled = true;
+
+        if (!PROFESSOR_WEBHOOK_URL || PROFESSOR_WEBHOOK_URL === "COLLEZ_VOTRE_URL_APPS_SCRIPT_ICI") {
+            localStorage.setItem("svt_air_copie_" + result.nom, JSON.stringify(result));
+            statusBanner.innerHTML = `✅ <strong>Travail validé et enregistré pour ${escapeHTML(result.prenom)} ${escapeHTML(result.nom)} (${escapeHTML(result.classe)}) !</strong><br>Découvre ton score et tes conseils ci-dessous (le corrigé type complet reste verrouillé jusqu'au code professeur).`;
+            renderStudentPostSendPanel(result);
+            btn.disabled = false;
+            return;
+        }
+
+        statusBanner.innerText = "⏳ Transmission de vos réponses au professeur en cours...";
+        try {
+            await fetch(PROFESSOR_WEBHOOK_URL, {
+                method: "POST",
+                mode: "no-cors",
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify(result)
+            });
+            statusBanner.innerHTML = `✅ <strong>Réponses envoyées avec succès au professeur !</strong> (${escapeHTML(result.prenom)} ${escapeHTML(result.nom)} - ${escapeHTML(result.classe)}).<br>Consulte ton bilan et les pistes pour progresser ci-dessous.`;
+            renderStudentPostSendPanel(result);
+        } catch (err) {
+            statusBanner.className = "status-banner warn";
+            statusBanner.innerHTML = "⚠️ Erreur réseau lors de l'envoi vers Google Sheets, mais ton bilan diagnostique est affiché ci-dessous.";
+            renderStudentPostSendPanel(result);
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    function unlockCorrection() {
+        const code = document.getElementById('unlock-code-input').value.trim().toUpperCase();
+        const errSpan = document.getElementById('unlock-err');
+        if (TEACHER_UNLOCK_CODES.includes(code)) {
+            errSpan.style.display = "none";
+            evaluateStudentWork();
+            document.getElementById('locked-correction-zone').style.display = "block";
+        } else {
+            errSpan.style.display = "inline";
+        }
+    }
+
+    // =========================================================================
+    // NAVIGATION ENTRE LES 5 ONGLETS
+    // =========================================================================
+    let currentTab = 'declenchante';
+    function switchTab(tab) {
+        currentTab = tab;
+        const order = ['declenchante', 'blocks', 'box', 'reel', 'bilan'];
+        const btns = document.querySelectorAll('.tab-btn');
+        btns.forEach((b, i) => b.classList.toggle('active', order[i] === tab));
+
+        document.getElementById('view-declenchante').style.display = (tab === 'declenchante') ? 'block' : 'none';
+        document.getElementById('view-reel').style.display = (tab === 'reel') ? 'block' : 'none';
+        document.getElementById('view-bilan').style.display = (tab === 'bilan') ? 'block' : 'none';
+
+        document.getElementById('panel-blocks').style.display = (tab === 'blocks') ? 'block' : 'none';
+        document.getElementById('qpanel-blocks').style.display = (tab === 'blocks') ? 'block' : 'none';
+        document.getElementById('panel-box').style.display = (tab === 'box') ? 'block' : 'none';
+        document.getElementById('qpanel-box').style.display = (tab === 'box') ? 'block' : 'none';
+
+        groupBlocks.visible = (tab === 'blocks');
+        groupBox.visible = (tab === 'box');
+    }
+
+    // =========================================================================
+    // SCÈNE 3D THREE.JS (MODÈLES 1 & 2)
+    // =========================================================================
+    const container = document.getElementById('canvas-container');
+    const labelsContainer = document.getElementById('labels-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f172a);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / (window.innerHeight - 60), 0.1, 1000);
+    camera.position.set(0, 3.2, 15.0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight - 60);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(8, 15, 10);
+    scene.add(dirLight);
+
+    const grid = new THREE.GridHelper(22, 22, 0x334155, 0x1e293b);
+    grid.position.y = -3.2;
+    scene.add(grid);
+
+    const groupBlocks = new THREE.Group();
+    const groupBox = new THREE.Group();
+    scene.add(groupBlocks);
+    scene.add(groupBox);
+    groupBlocks.visible = false;
+    groupBox.visible = false;
+
+    const labels = [];
+    function createLabel(text, pos3D, tab, cssClass = '') {
+        const div = document.createElement('div');
+        div.className = 'label-3d ' + cssClass;
+        div.innerHTML = text;
+        labelsContainer.appendChild(div);
+        const obj = { element: div, pos: pos3D.clone(), tab, visible: true };
+        labels.push(obj);
+        return obj;
+    }
+
+    function updateLabels() {
+        const wHalf = renderer.domElement.clientWidth / 2;
+        const hHalf = renderer.domElement.clientHeight / 2;
+        labels.forEach(lbl => {
+            if (lbl.tab !== currentTab || !lbl.visible) {
+                lbl.element.style.display = 'none';
+                return;
+            }
+            const v = lbl.pos.clone().project(camera);
+            if (v.z > 1) { lbl.element.style.display = 'none'; return; }
+            lbl.element.style.display = 'block';
+            lbl.element.style.left = `${(v.x * wHalf) + wHalf}px`;
+            lbl.element.style.top = `${-(v.y * hHalf) + hHalf}px`;
+        });
+    }
+
+    // --- MODÈLE 1 : BLOCS AMBIANT & CONGELÉ ---
+    const subGroupAmbient = new THREE.Group();
+    const subGroupFrozen = new THREE.Group();
+    groupBlocks.add(subGroupAmbient);
+    groupBlocks.add(subGroupFrozen);
+
+    const blockGeo = new THREE.BoxGeometry(3.2, 0.75, 1.7);
+    const stickGeo = new THREE.CylinderGeometry(0.05, 0.05, 2.3, 12);
+    const stickMat = new THREE.MeshPhongMaterial({ color: 0x78350f });
+    const tipGeo = new THREE.SphereGeometry(0.09, 12, 12);
+    const tipMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+
+    const ambientBlock = new THREE.Mesh(blockGeo, new THREE.MeshPhongMaterial({ color: 0x94a3b8 }));
+    ambientBlock.position.set(-3.6, 1.2, 0);
+    subGroupAmbient.add(ambientBlock);
+
+    const stickLeft = new THREE.Mesh(stickGeo, stickMat);
+    stickLeft.position.set(-2.8, -1.2, 0);
+    stickLeft.rotation.z = Math.PI / 4;
+    subGroupAmbient.add(stickLeft);
+
+    const tipLeft = new THREE.Mesh(tipGeo, tipMat);
+    tipLeft.position.set(-3.6, -0.35, 0);
+    subGroupAmbient.add(tipLeft);
+
+    const frozenBlock = new THREE.Mesh(blockGeo, new THREE.MeshPhongMaterial({ color: 0x38bdf8, shininess: 90 }));
+    frozenBlock.position.set(2.8, 1.2, 0);
+    subGroupFrozen.add(frozenBlock);
+
+    const stickRight = new THREE.Mesh(stickGeo, stickMat);
+    stickRight.position.set(3.6, -1.2, 0);
+    stickRight.rotation.z = Math.PI / 4;
+    subGroupFrozen.add(stickRight);
+
+    const tipRight = new THREE.Mesh(tipGeo, tipMat);
+    tipRight.position.set(2.8, -0.35, 0);
+    subGroupFrozen.add(tipRight);
+
+    const smokeGeo = new THREE.SphereGeometry(0.105, 10, 10);
+    const smokeWarmMat = new THREE.MeshBasicMaterial({ color: 0xfca5a5, transparent: true, opacity: 0.65 });
+    const smokeColdMat = new THREE.MeshBasicMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.65 });
+
+    const ambientParticles = [];
+    const frozenParticles = [];
+    for (let i = 0; i < 85; i++) {
+        const pa = new THREE.Mesh(smokeGeo, smokeWarmMat);
+        pa.userData = { t: Math.random(), side: (i % 2 === 0) ? 1 : -1, zOff: (Math.random() - 0.5) * 0.55 };
+        subGroupAmbient.add(pa);
+        ambientParticles.push(pa);
+
+        const pf = new THREE.Mesh(smokeGeo, smokeColdMat);
+        pf.userData = { t: Math.random(), side: (i % 2 === 0) ? 1 : -1, zOff: (Math.random() - 0.5) * 0.55 };
+        subGroupFrozen.add(pf);
+        frozenParticles.push(pf);
+    }
+
+    const lblAmbBlock = createLabel("Bloc à température ambiante", new THREE.Vector3(-3.6, 2.0, 0), 'blocks');
+    const lblAmbInc = createLabel("Encens", new THREE.Vector3(-3.6, -2.2, 0), 'blocks', 'hot');
+    const lblFrozBlock = createLabel("Bloc congelé", new THREE.Vector3(2.8, 2.0, 0), 'blocks', 'cold');
+    const lblFrozInc = createLabel("Encens", new THREE.Vector3(2.8, -2.2, 0), 'blocks', 'cold');
+
+    function setBlockFilter(filter) {
+        subGroupAmbient.visible = (filter === 'both' || filter === 'ambient');
+        subGroupFrozen.visible = (filter === 'both' || filter === 'frozen');
+        lblAmbBlock.visible = subGroupAmbient.visible;
+        lblAmbInc.visible = subGroupAmbient.visible;
+        lblFrozBlock.visible = subGroupFrozen.visible;
+        lblFrozInc.visible = subGroupFrozen.visible;
+    }
+
+    // --- MODÈLE 2 : BOÎTE À CONVECTION ---
+    let candleLit = false;
+    const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.2, roughness: 0.1, depthWrite: false });
+    const boxGeo = new THREE.BoxGeometry(7.2, 3.0, 2.8);
+    const mainBox = new THREE.Mesh(boxGeo, glassMat);
+    mainBox.position.set(-0.4, -1.5, 0);
+    groupBox.add(mainBox);
+    mainBox.add(new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), new THREE.LineBasicMaterial({ color: 0x94a3b8 })));
+
+    const chimGeo = new THREE.CylinderGeometry(0.6, 0.6, 2.1, 28, 1, true);
+    const chimLeft = new THREE.Mesh(chimGeo, glassMat);
+    chimLeft.position.set(-2.6, 1.05, 0);
+    groupBox.add(chimLeft);
+
+    const chimRight = new THREE.Mesh(chimGeo, glassMat);
+    chimRight.position.set(1.8, 1.05, 0);
+    groupBox.add(chimRight);
+
+    const candleMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.85, 20), new THREE.MeshPhongMaterial({ color: 0xfef3c7 }));
+    candleMesh.position.set(-2.6, -2.55, 0);
+    groupBox.add(candleMesh);
+
+    const flameMesh = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.5, 16), new THREE.MeshBasicMaterial({ color: 0xf97316 }));
+    flameMesh.position.set(-2.6, -1.85, 0);
+    flameMesh.visible = false;
+    groupBox.add(flameMesh);
+
+    const incStickBox = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.4, 12), stickMat);
+    incStickBox.position.set(2.9, 2.35, 0);
+    incStickBox.rotation.z = Math.PI / 2;
+    groupBox.add(incStickBox);
+
+    const incTipBox = new THREE.Mesh(tipGeo, tipMat);
+    incTipBox.position.set(1.8, 2.35, 0);
+    groupBox.add(incTipBox);
+
+    const convParticles = [];
+    for (let i = 0; i < 140; i++) {
+        const p = new THREE.Mesh(smokeGeo, new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.8 }));
+        p.userData = { t: Math.random(), rOff: (Math.random() - 0.5) * 0.4, zOff: (Math.random() - 0.5) * 0.45 };
+        groupBox.add(p);
+        convParticles.push(p);
+    }
+
+    createLabel("Bougie", new THREE.Vector3(-3.8, -2.55, 0), 'box');
+    createLabel("Encens", new THREE.Vector3(3.6, 2.4, 0), 'box');
+    const lblLowPress = createLabel("Basse Pression", new THREE.Vector3(-2.6, 2.75, 0), 'box', 'hot');
+    const lblHighPress = createLabel("Haute Pression", new THREE.Vector3(1.8, 1.2, 1.3), 'box', 'cold');
+    const lblWindDir = createLabel("⬅ Direction du vent", new THREE.Vector3(-0.4, -3.4, 0), 'box', 'hot');
+    lblLowPress.visible = false;
+    lblHighPress.visible = false;
+    lblWindDir.visible = false;
+
+    function toggleCandle(state) {
+        candleLit = state;
+        flameMesh.visible = state;
+        lblLowPress.visible = state;
+        lblHighPress.visible = state;
+        lblWindDir.visible = state;
+    }
+
+    const colCold = new THREE.Color(0x38bdf8);
+    const colHot = new THREE.Color(0xef4444);
+
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+
+        if (currentTab === 'blocks') {
+            ambientParticles.forEach(p => {
+                p.userData.t = (p.userData.t + 0.0055) % 1;
+                const t = p.userData.t;
+                let x, y;
+                if (t < 0.35) {
+                    x = -3.6 + Math.sin(t * 15) * 0.07;
+                    y = -0.35 + (t / 0.35) * 1.1;
+                } else if (t < 0.65) {
+                    const k = (t - 0.35) / 0.30;
+                    x = -3.6 + p.userData.side * (k * 1.8);
+                    y = 0.75 + k * 0.25;
+                } else {
+                    const k = (t - 0.65) / 0.35;
+                    x = -3.6 + p.userData.side * (1.8 + k * 0.35);
+                    y = 1.0 + k * 1.6;
+                }
+                p.position.set(x, y, p.userData.zOff);
+            });
+
+            frozenParticles.forEach(p => {
+                p.userData.t = (p.userData.t + 0.0055) % 1;
+                const t = p.userData.t;
+                let x, y;
+                if (t < 0.30) {
+                    x = 2.8 + Math.sin(t * 15) * 0.06;
+                    y = -0.35 + (t / 0.30) * 1.05;
+                } else {
+                    const k = (t - 0.30) / 0.70;
+                    x = 2.8 + p.userData.side * (k * 2.2);
+                    y = 0.70 - (k * k) * 2.7;
+                }
+                p.position.set(x, y, p.userData.zOff);
+            });
+        }
+
+        if (currentTab === 'box') {
+            if (candleLit) flameMesh.scale.y = 0.9 + Math.sin(Date.now() * 0.02) * 0.15;
+
+            convParticles.forEach(p => {
+                p.userData.t = (p.userData.t + 0.0045) % 1;
+                const t = p.userData.t;
+                if (!candleLit) {
+                    p.position.set(1.8 + Math.sin(t * 8 + p.userData.rOff * 5) * 0.22, 2.35 + t * 1.4, p.userData.zOff);
+                    p.material.color.setHex(0xcbd5e1);
+                } else {
+                    let x, y;
+                    if (t < 0.30) {
+                        const k = t / 0.30;
+                        x = 1.8 + p.userData.rOff * 0.45;
+                        y = 2.35 - k * 4.5;
+                        p.material.color.copy(colCold);
+                    } else if (t < 0.65) {
+                        const k = (t - 0.30) / 0.35;
+                        x = 1.8 - k * 4.4;
+                        y = -2.15 + Math.sin(k * Math.PI) * 0.2 + p.userData.rOff * 0.35;
+                        p.material.color.lerpColors(colCold, colHot, k);
+                    } else {
+                        const k = (t - 0.65) / 0.35;
+                        x = -2.6 + p.userData.rOff * 0.45;
+                        y = -2.15 + k * 4.9;
+                        p.material.color.copy(colHot);
+                    }
+                    p.position.set(x, y, p.userData.zOff);
+                }
+            });
+        }
+
+        updateLabels();
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / (window.innerHeight - 60);
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight - 60);
+    });
+
+    animate();
+</script>
+</body>
+</html>

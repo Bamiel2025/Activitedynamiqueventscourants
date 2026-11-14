@@ -847,6 +847,9 @@
                     <div id="send-status-box" class="hidden mt-4 p-3.5 rounded-xl text-xs leading-relaxed"></div>
                 </div>
 
+                <!-- Panneau Bilan Immédiat Élève (affiché automatiquement après l'envoi au professeur, sans révéler le corrigé type verrouillé) -->
+                <div id="student-post-send-panel" class="hidden space-y-5"></div>
+
                 <!-- Carte Déverrouillage Bilan -->
                 <div class="bg-slate-900/90 p-6 rounded-2xl border border-slate-800 shadow-xl">
                     <div class="flex items-center justify-between mb-2">
@@ -1677,10 +1680,230 @@
         animate();
 
         // =========================================================================
-        // 5. MOTEUR D'ÉVALUATION CRITÉRIÉE SUR 10 POINTS (HORS LLM)
+        // 5. MOTEUR D'ÉVALUATION CRITÉRIÉE SUR 10 POINTS (HORS LLM) & FEEDBACK ÉLÈVE
         // =========================================================================
         function cleanText(s) {
             return (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        }
+
+        function escapeHTML(s) {
+            return String(s || "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
+        const CONNECTOR_PATTERNS = [
+            { label: "car", re: /\bcar\b/g },
+            { label: "donc", re: /\bdonc\b/g },
+            { label: "parce que", re: /\bparce que\b/g },
+            { label: "ainsi", re: /\bainsi\b/g },
+            { label: "en effet", re: /\ben effet\b/g },
+            { label: "par conséquent", re: /\bpar consequent\b/g },
+            { label: "puisque", re: /\bpuisque\b/g },
+            { label: "grâce à", re: /\bgrace a\b/g },
+            { label: "alors", re: /\balors\b/g },
+            { label: "c'est pourquoi", re: /\bcest pourquoi\b|\bc'est pourquoi\b/g },
+            { label: "de ce fait", re: /\bde ce fait\b/g },
+            { label: "toute fois / cependant", re: /\b(cependant|toutefois|or|tandis que|alors que)\b/g }
+        ];
+
+        function extractConnectorsFound(cleanStr) {
+            const found = [];
+            CONNECTOR_PATTERNS.forEach(c => {
+                c.re.lastIndex = 0;
+                if (c.re.test(cleanStr) && !found.includes(c.label)) found.push(c.label);
+            });
+            return found;
+        }
+
+        function countSentences(rawStr) {
+            return String(rawStr || "").split(/[.!?]+/).map(x => x.trim()).filter(Boolean).length;
+        }
+
+        function getMasteryInfo(scoreSur10) {
+            const pct = (scoreSur10 / 10) * 100;
+            if (pct >= 80) return { code: "TBM", label: "Très satisfaisant", badge: "🟢 Très satisfaisant (TBM)", css: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40", bar: "bg-emerald-500" };
+            if (pct >= 55) return { code: "MS", label: "Satisfaisant", badge: "🔵 Satisfaisant (MS)", css: "bg-sky-500/20 text-sky-300 border border-sky-500/40", bar: "bg-sky-500" };
+            if (pct >= 35) return { code: "MF", label: "Fragile", badge: "🟠 Fragile (MF)", css: "bg-amber-500/20 text-amber-300 border border-amber-500/40", bar: "bg-amber-500" };
+            return { code: "MI", label: "Insuffisant", badge: "🔴 Insuffisant (MI)", css: "bg-red-500/20 text-red-300 border border-red-500/40", bar: "bg-red-500" };
+        }
+
+        function findKeywordsInText(cleanStr, wordList) {
+            const hits = [];
+            wordList.forEach(w => {
+                const nw = cleanText(w);
+                if (nw && cleanStr.includes(nw) && !hits.includes(w)) hits.push(w);
+            });
+            return hits;
+        }
+
+        function highlightCopyHTML(sections, theme) {
+            const sciTermsAir = [
+                "haute pression", "basse pression", "moins dense", "plus dense", "densite",
+                "anticyclone", "depression", "air chaud", "air froid", "sahara", "sable",
+                "france", "canicule", "chaleur", "bougie", "encens", "cheminee", "fumee",
+                "monte", "descend", "aspire", "vent", "flux", "mouvement"
+            ];
+            const sciTermsEau = [
+                "haute pression", "basse pression", "moins dense", "plus dense", "densite",
+                "courants marins", "courant de surface", "courant", "vents dominants", "alizes",
+                "gyres", "gyre", "tourbillon", "henderson", "dechets", "plastiques",
+                "eau chaude", "eau froide", "thermique", "surface", "fond", "plonge", "monte", "atlantique"
+            ];
+            const sciWords = (theme === 'air' ? sciTermsAir : sciTermsEau)
+                .slice()
+                .sort((a, b) => b.length - a.length);
+            const connWords = [
+                "par conséquent", "c'est pourquoi", "de ce fait", "parce que", "en effet",
+                "tandis que", "alors que", "grâce à", "puisque", "cependant", "toutefois",
+                "ainsi", "alors", "donc", "car"
+            ];
+
+            function stripAcc(str) {
+                return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            }
+
+            function highlightLine(raw) {
+                if (!raw || !raw.trim()) return '<span class="italic text-slate-500">(aucune réponse saisie)</span>';
+                const tokens = raw.split(/(\s+|[.,;:!?()'’"\-])/).filter(Boolean);
+                // Surlignage mot à mot / bigramme sans injection HTML
+                const lowerNoAcc = stripAcc(raw.toLowerCase());
+                const spans = [];
+                sciWords.forEach(term => {
+                    const re = new RegExp("\\b" + term.replace(/\s+/g, "\\s+") + "\\b", "gi");
+                    let m;
+                    while ((m = re.exec(lowerNoAcc)) !== null) {
+                        spans.push({ start: m.index, end: m.index + m[0].length, type: 'sci' });
+                    }
+                });
+                connWords.forEach(term => {
+                    const tNoAcc = stripAcc(term).replace(/'/g, "'?");
+                    const re = new RegExp("\\b" + tNoAcc.replace(/\s+/g, "\\s+") + "\\b", "gi");
+                    let m;
+                    while ((m = re.exec(lowerNoAcc)) !== null) {
+                        spans.push({ start: m.index, end: m.index + m[0].length, type: 'conn' });
+                    }
+                });
+                // Résolution des chevauchements (priorité au span le plus long / premier trouvé)
+                spans.sort((a, b) => a.start - b.start || (b.end - b.start) - (a.end - a.start));
+                const kept = [];
+                let cursor = 0;
+                // Mapping approximatif sûr si décomposition diacritique change la longueur : fallback token par token si longueur diffère
+                if (lowerNoAcc.length !== raw.length) {
+                    return tokens.map(tok => {
+                        const ct = stripAcc(tok.toLowerCase()).trim();
+                        if (!ct) return escapeHTML(tok);
+                        if (connWords.some(c => stripAcc(c) === ct)) {
+                            return `<span class="bg-sky-500/25 text-sky-300 px-1 rounded underline decoration-sky-400/60 font-medium">${escapeHTML(tok)}</span>`;
+                        }
+                        if (sciWords.some(s => s.split(/\s+/).includes(ct) && ct.length > 2)) {
+                            return `<span class="bg-emerald-500/20 text-emerald-300 px-1 rounded font-semibold">${escapeHTML(tok)}</span>`;
+                        }
+                        return escapeHTML(tok);
+                    }).join('');
+                }
+                for (const sp of spans) {
+                    if (sp.start >= cursor) {
+                        kept.push(sp);
+                        cursor = sp.end;
+                    }
+                }
+                let out = '';
+                let pos = 0;
+                for (const sp of kept) {
+                    if (sp.start > pos) out += escapeHTML(raw.slice(pos, sp.start));
+                    const seg = escapeHTML(raw.slice(sp.start, sp.end));
+                    if (sp.type === 'sci') {
+                        out += `<span class="bg-emerald-500/20 text-emerald-300 px-1 rounded font-semibold">${seg}</span>`;
+                    } else {
+                        out += `<span class="bg-sky-500/25 text-sky-300 px-1 rounded underline decoration-sky-400/60 font-medium">${seg}</span>`;
+                    }
+                    pos = sp.end;
+                }
+                if (pos < raw.length) out += escapeHTML(raw.slice(pos));
+                return out;
+            }
+
+            return sections.map(sec => `
+                <div class="p-3 bg-slate-950/80 rounded-xl border border-slate-800/80">
+                    <div class="text-[11px] font-bold text-slate-400 mb-1">${escapeHTML(sec.label)}</div>
+                    <div class="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">${highlightLine(sec.text)}</div>
+                </div>
+            `).join('');
+        }
+
+        function buildDiagnostics(theme, critList, cleanAll, cleanQ3, wordCount, sentenceCount, connectorsFound, oceanScore) {
+            const erreursDetectees = [];
+            const conseilsProgression = [];
+
+            // 1. Détection d'erreurs scientifiques fréquentes (confusions / inversions)
+            if (theme === 'air') {
+                if (/chaud[^.?!]{0,35}(plus dense|descend|tombe|lourd)/.test(cleanAll)) {
+                    erreursDetectees.push("Confusion chaud / froid sur la densité : vérifie le mouvement de l'air chaud dans le modèle 1 (Monte-t-il ou descend-il ? Est-il plus ou moins dense ?).");
+                }
+                if (/froid[^.?!]{0,35}(moins dense|monte|eleve|leger)/.test(cleanAll)) {
+                    erreursDetectees.push("Confusion sur l'air froid : observe à nouveau le bloc congelé (Modèle 1) et l'encens (Modèle 2) pour vérifier le sens vertical de déplacement de l'air froid.");
+                }
+                if (/(de la |depuis la )?basse pression\s+(vers|va a)\s+(la\s+)?haute pression/.test(cleanAll) && !/(haute pression|haute)\s+vers\s+(la\s+)?basse pression/.test(cleanAll)) {
+                    erreursDetectees.push("Inversion du sens du vent : relis les manomètres du Modèle 2 et vérifie de quelle zone de pression (Haute ou Basse) part la fumée d'encens.");
+                }
+            } else {
+                if (/eau chaude[^.?!]{0,35}(plus dense|descend|fond|plonge)/.test(cleanAll) || /rouge[^.?!]{0,35}(descend|fond|bas)/.test(cleanAll)) {
+                    erreursDetectees.push("Confusion thermique (Modèle 2) : observe de quel côté/niveau se place l'eau chaude rouge dans les colonnes après ouverture des vannes.");
+                }
+                if (/eau froide[^.?!]{0,35}(moins dense|monte|surface|haut)/.test(cleanAll) || /bleu[^.?!]{0,35}(monte|haut)/.test(cleanAll)) {
+                    erreursDetectees.push("Confusion sur l'eau froide : vérifie pourquoi l'eau froide bleue se déplace vers le bas ou le haut dans le Modèle 2.");
+                }
+                if (typeof oceanScore === 'number' && oceanScore < 1) {
+                    erreursDetectees.push(`Carte interactive incomplète (${oceanScore}/1 pt) : trace les 4 flèches de circulation autour de l'océan Atlantique Nord (d'Est en Ouest vers les tropiques puis en retour par le nord).`);
+                }
+            }
+
+            // 2. Omissions ciblées par critère manquant (indices progressifs sans révéler le corrigé type)
+            critList.forEach(c => {
+                if (!c.ok) {
+                    if (c.code === 'LANG1') {
+                        erreursDetectees.push(`Maîtrise de la langue insuffisante (${wordCount} mots, ${sentenceCount} phrase(s)) : développe davantage tes observations et vérifie majuscules et points.`);
+                        conseilsProgression.push("Rédige au moins 2 à 3 phrases complètes par réponse (sujet + verbe + complément) en visant 40+ mots au total.");
+                    } else if (c.code === 'LANG2') {
+                        erreursDetectees.push("Absence de connecteur logique dans la synthèse finale (Q3) pour relier le modèle au cas réel.");
+                        conseilsProgression.push("Dans Q3, utilise explicitement des connecteurs de cause/conséquence (« car », « parce que », « donc », « ainsi », « par conséquent »).");
+                    } else {
+                        erreursDetectees.push(`Critère non validé [${c.q}] : ${c.desc}`);
+                        if (c.conseil) conseilsProgression.push(c.conseil);
+                    }
+                }
+            });
+
+            // 3. Choix d'un atelier de remédiation ciblé
+            const failedD4 = critList.filter(c => !c.ok && c.comp === 'D4').length;
+            const failedD1 = critList.filter(c => !c.ok && c.comp === 'D1').length;
+            const failedLang = critList.filter(c => !c.ok && c.comp === 'LANG').length;
+            const totalOk = critList.filter(c => c.ok).length;
+
+            let atelierRemediation = "Défi d'approfondissement : ta maîtrise est très solide — rédige un schéma-bilan légendé reliant modèles et circulation planétaire.";
+            if (totalOk < critList.length) {
+                if (failedD4 >= failedD1 && failedD4 > 0) {
+                    atelierRemediation = "Atelier A (Démarche & Modèles - D4) : reprendre la lecture guidée des observations 3D (qui monte/descend ? où souffle l'air/l'eau ?) avant d'interpréter.";
+                } else if (failedD1 > 0) {
+                    atelierRemediation = "Atelier B (Explication physique - D1) : relier explicitement température -> densité -> mouvement vertical -> zones de pression -> vent/courants et phénomène réel.";
+                } else if (failedLang > 0) {
+                    atelierRemediation = "Atelier C (Rédaction scientifique - D1.1) : transformer les idées en phrases complètes reliées par des connecteurs logiques (donc, car, ainsi).";
+                }
+            }
+
+            if (conseilsProgression.length === 0) {
+                conseilsProgression.push("Bravo ! Tous les critères scientifiques et de rédaction sont validés. Vérifie la précision de ton vocabulaire avant d'enchaîner avec l'autre thème.");
+            }
+
+            return {
+                erreursDetectees,
+                conseilsProgression: Array.from(new Set(conseilsProgression)),
+                atelierRemediation
+            };
         }
 
         function evaluateActivity(theme) {
@@ -1689,10 +1912,18 @@
             const classe = document.getElementById('st-classe').value;
 
             if (theme === 'air') {
-                const q0 = cleanText(document.getElementById('ans-air-prob').value + " " + document.getElementById('ans-air-hyp').value);
-                const q1 = cleanText(document.getElementById('ans-air-q1').value);
-                const q2 = cleanText(document.getElementById('ans-air-q2').value);
-                const q3 = cleanText(document.getElementById('ans-air-q3').value);
+                const rawProb = document.getElementById('ans-air-prob').value;
+                const rawHyp = document.getElementById('ans-air-hyp').value;
+                const rawQ1 = document.getElementById('ans-air-q1').value;
+                const rawQ2 = document.getElementById('ans-air-q2').value;
+                const rawQ3 = document.getElementById('ans-air-q3').value;
+
+                const q0 = cleanText(rawProb + " " + rawHyp);
+                const q1 = cleanText(rawQ1);
+                const q2 = cleanText(rawQ2);
+                const q3 = cleanText(rawQ3);
+                const allClean = [q0, q1, q2, q3].join(" ");
+                const allRaw = [rawProb, rawHyp, rawQ1, rawQ2, rawQ3].join(" ");
 
                 const c_prob = /(comment|pourquoi|\?)/.test(q0) && /(chaleur|canicule|sable|dust|france|sahara)/.test(q0);
                 const c_hyp  = /(pense|hypothese|peut-etre|flux|vent|courant|air chaud|sud)/.test(q0);
@@ -1708,53 +1939,82 @@
 
                 const scoreD1 = (c_dens ? 1 : 0) + (c_press ? 1 : 0) + (c_vent ? 1 : 0) + (c_real ? 1 : 0);
 
-                const totalWords = (q0 + " " + q1 + " " + q2 + " " + q3).split(/\s+/).filter(Boolean).length;
-                const c_lang1 = totalWords >= 35 && /[.!?]/.test(document.getElementById('ans-air-q1').value + document.getElementById('ans-air-q2').value + document.getElementById('ans-air-q3').value);
+                const wordCount = allClean.split(/\s+/).filter(Boolean).length;
+                const sentenceCount = countSentences(allRaw);
+                const connectorsFound = extractConnectorsFound(q3);
+                const c_lang1 = wordCount >= 35 && /[.!?]/.test(rawQ1 + rawQ2 + rawQ3);
                 const c_lang2 = /\b(car|donc|parce que|ainsi|en effet|par consequent|puisque|grace a|alors|cest pourquoi|de ce fait)\b/.test(q3);
                 const scoreLang = (c_lang1 ? 1 : 0) + (c_lang2 ? 1 : 0);
 
                 const scoreTotal = scoreD4 + scoreD1 + scoreLang;
+                const scoreSur5 = Math.round((scoreTotal / 2) * 100) / 100;
+                const scoreSur20 = Math.round(scoreTotal * 20) / 10;
+                const mastery = getMasteryInfo(scoreTotal);
 
                 const critList = [
-                    { q: "Étape 1 (D4)", desc: "Formuler le problème scientifique sur la vague de chaleur et le sable", ok: c_prob, pts: c_prob ? "1 / 1" : "0 / 1" },
-                    { q: "Étape 1 (D4)", desc: "Proposer l'hypothèse d'un flux d'air chaud venant du sud", ok: c_hyp, pts: c_hyp ? "1 / 1" : "0 / 1" },
-                    { q: "Modèle 1 (D4)", desc: "Observer la montée de la fumée sous bloc ambiant et descente sous bloc froid", ok: c_mod1, pts: c_mod1 ? "1 / 1" : "0 / 1" },
-                    { q: "Modèle 1 (D1)", desc: "Expliquer par la densité (air chaud moins dense / air froid plus dense)", ok: c_dens, pts: c_dens ? "1 / 1" : "0 / 1" },
-                    { q: "Modèle 2 (D4)", desc: "Décrire la montée de l'air chaud (bougie) et l'aspiration de l'air froid (encens)", ok: c_mod2, pts: c_mod2 ? "1 / 1" : "0 / 1" },
-                    { q: "Modèle 2 (D1)", desc: "Identifier les zones de Haute Pression et de Basse Pression", ok: c_press, pts: c_press ? "1 / 1" : "0 / 1" },
-                    { q: "Modèle 2 (D1)", desc: "Expliquer que le vent souffle de la Haute vers la Basse pression", ok: c_vent, pts: c_vent ? "1 / 1" : "0 / 1" },
-                    { q: "Réel (D1)", desc: "Valider l'hypothèse (transport du sable du Sahara vers la France)", ok: c_real, pts: c_real ? "1 / 1" : "0 / 1" },
-                    { q: "Langue (D1.1)", desc: "Phrases construites et ponctuées (majuscules, points)", ok: c_lang1, pts: c_lang1 ? "1 / 1" : "0 / 1" },
-                    { q: "Langue (D1.1)", desc: "Utiliser des connecteurs logiques (car, donc, ainsi...) dans l'explication du réel", ok: c_lang2, pts: c_lang2 ? "1 / 1" : "0 / 1" }
+                    { code: "PROB", comp: "D4", q: "Étape 1 (D4)", desc: "Formuler le problème scientifique sur la vague de chaleur et le sable", ok: c_prob, pts: c_prob ? "1 / 1" : "0 / 1", motsReperees: findKeywordsInText(q0, ["comment", "pourquoi", "chaleur", "canicule", "sable", "france", "sahara"]), conseil: "À l'étape 1, formule une vraie question scientifique (« Comment... ? ») mentionnant la chaleur/sable entre Sahara et France." },
+                    { code: "HYP", comp: "D4", q: "Étape 1 (D4)", desc: "Proposer l'hypothèse d'un flux d'air chaud venant du sud", ok: c_hyp, pts: c_hyp ? "1 / 1" : "0 / 1", motsReperees: findKeywordsInText(q0, ["pense", "hypothese", "flux", "vent", "courant", "air chaud", "sud"]), conseil: "Propose une piste explicative (« Je pense que... ») reliant l'origine du phénomène à un flux d'air ou un vent venant du sud." },
+                    { code: "MOD1", comp: "D4", q: "Modèle 1 (D4)", desc: "Observer la montée de la fumée sous bloc ambiant et descente sous bloc froid", ok: c_mod1, pts: c_mod1 ? "1 / 1" : "0 / 1", motsReperees: findKeywordsInText(q1, ["ambiant", "chaud", "monte", "congele", "froid", "descend"]), conseil: "À l'étape 2 (Modèle 1), décris précisément le trajet de la fumée sous chacun des deux blocs (ambiant vs congelé)." },
+                    { code: "DENS", comp: "D1", q: "Modèle 1 (D1)", desc: "Expliquer par la densité (air chaud moins dense / air froid plus dense)", ok: c_dens, pts: c_dens ? "1 / 1" : "0 / 1", motsReperees: findKeywordsInText(q1 + " " + q3, ["densite", "moins dense", "plus dense", "leger", "lourd"]), conseil: "Utilise le concept scientifique de « densité » (« moins dense » / « plus dense ») pour expliquer pourquoi les masses d'air montent ou descendent." },
+                    { code: "MOD2", comp: "D4", q: "Modèle 2 (D4)", desc: "Décrire la montée de l'air chaud (bougie) et l'aspiration de l'air froid (encens)", ok: c_mod2, pts: c_mod2 ? "1 / 1" : "0 / 1", motsReperees: findKeywordsInText(q2, ["bougie", "chaud", "monte", "cheminee", "encens", "froid", "descend", "aspire"]), conseil: "À l'étape 3 (Modèle 2), compare la colonne de la bougie et celle de l'encens pour décrire la boucle d'air complète." },
+                    { code: "PRESS", comp: "D1", q: "Modèle 2 (D1)", desc: "Identifier les zones de Haute Pression et de Basse Pression", ok: c_press, pts: c_press ? "1 / 1" : "0 / 1", motsReperees: findKeywordsInText(q2 + " " + q3, ["haute pression", "basse pression"]), conseil: "Nomme explicitement les deux zones (« Haute Pression » et « Basse Pression ») mesurées dans le modèle 2." },
+                    { code: "VENT", comp: "D1", q: "Modèle 2 (D1)", desc: "Expliquer que le vent souffle de la Haute vers la Basse pression", ok: c_vent, pts: c_vent ? "1 / 1" : "0 / 1", motsReperees: findKeywordsInText(q2 + " " + q3, ["vent", "haute", "basse"]), conseil: "Précise l'orientation horizontale du vent par rapport aux zones de haute et de basse pression." },
+                    { code: "REAL", comp: "D1", q: "Réel (D1)", desc: "Valider l'hypothèse (transport du sable du Sahara vers la France)", ok: c_real, pts: c_real ? "1 / 1" : "0 / 1", motsReperees: findKeywordsInText(q3, ["sahara", "sable", "france", "chaleur", "car", "donc", "explique"]), conseil: "À l'étape 4 (Q3), relie explicitement ton explication physique au cas réel Sahara -> France et indique si ton hypothèse est validée." },
+                    { code: "LANG1", comp: "LANG", q: "Langue (D1.1)", desc: "Phrases construites et ponctuées (majuscules, points)", ok: c_lang1, pts: c_lang1 ? "1 / 1" : "0 / 1", motsReperees: [`${wordCount} mots`, `${sentenceCount} phrase(s)`], conseil: "" },
+                    { code: "LANG2", comp: "LANG", q: "Langue (D1.1)", desc: "Utiliser des connecteurs logiques (car, donc, ainsi...) dans l'explication du réel", ok: c_lang2, pts: c_lang2 ? "1 / 1" : "0 / 1", motsReperees: connectorsFound, conseil: "" }
+                ];
+
+                const diag = buildDiagnostics('air', critList, allClean, q3, wordCount, sentenceCount, connectorsFound, null);
+                const copySections = [
+                    { label: "Étape 1 — Problème & Hypothèse", text: `${rawProb}\n${rawHyp}`.trim() },
+                    { label: "Étape 2 — Modèle 1 (Blocs chaud/froid)", text: rawQ1 },
+                    { label: "Étape 3 — Modèle 2 (Boîte à vent)", text: rawQ2 },
+                    { label: "Étape 4 — Retour au réel (Sahara / France)", text: rawQ3 }
                 ];
 
                 return {
                     activite: "Dynamique des masses d'air",
+                    theme: "air",
                     nom, prenom, classe,
-                    scoreTotal, scoreD4, scoreD1, scoreLangue: scoreLang,
+                    scoreTotal, scoreSur5, scoreSur20,
+                    niveauMaitrise: mastery.code,
+                    scoreD4, scoreD1, scoreLangue: scoreLang,
+                    wordCount, sentenceCount, connectorsFound,
                     critList,
+                    erreursDetectees: diag.erreursDetectees,
+                    conseilsProgression: diag.conseilsProgression,
+                    atelierRemediation: diag.atelierRemediation,
+                    highlightedCopyHTML: highlightCopyHTML(copySections, 'air'),
                     q1: {
                         intitule: "Démarche Dust & Modèle 1 (Air chaud/froid)",
-                        reponse: `[Problème/Hypothèse] ${document.getElementById('ans-air-prob').value} / ${document.getElementById('ans-air-hyp').value}\n[Q1] ${document.getElementById('ans-air-q1').value}`,
+                        reponse: `[Problème/Hypothèse] ${rawProb} / ${rawHyp}\n[Q1] ${rawQ1}`,
                         score: (c_prob?1:0) + (c_hyp?1:0) + (c_mod1?1.5:0) + (c_dens?1.5:0),
-                        valides: critList.filter(x => x.ok).slice(0, 4).map(x => x.desc),
-                        manquants: critList.filter(x => !x.ok).slice(0, 4).map(x => x.desc)
+                        valides: critList.slice(0, 4).filter(x => x.ok).map(x => x.desc),
+                        manquants: critList.slice(0, 4).filter(x => !x.ok).map(x => x.desc)
                     },
                     q2: {
                         intitule: "Modèle 2 (Boîte à vent) & Réel Septembre 2023",
-                        reponse: `[Q2] ${document.getElementById('ans-air-q2').value}\n[Q3] ${document.getElementById('ans-air-q3').value}`,
+                        reponse: `[Q2] ${rawQ2}\n[Q3] ${rawQ3}`,
                         score: (c_mod2?1:0) + (c_press?1:0) + (c_vent?1:0) + (c_real?1:0) + (c_lang1?0.5:0) + (c_lang2?0.5:0),
-                        valides: critList.filter(x => x.ok).slice(4).map(x => x.desc),
-                        manquants: critList.filter(x => !x.ok).slice(4).map(x => x.desc)
+                        valides: critList.slice(4).filter(x => x.ok).map(x => x.desc),
+                        manquants: critList.slice(4).filter(x => !x.ok).map(x => x.desc)
                     }
                 };
 
             } else {
                 // Évaluation Activité EAU
-                const q0 = cleanText(document.getElementById('ans-eau-prob').value + " " + document.getElementById('ans-eau-hyp').value);
-                const q1 = cleanText(document.getElementById('ans-eau-q1').value);
-                const q2 = cleanText(document.getElementById('ans-eau-q2').value);
-                const q3 = cleanText(document.getElementById('ans-eau-q3').value);
+                const rawProb = document.getElementById('ans-eau-prob').value;
+                const rawHyp = document.getElementById('ans-eau-hyp').value;
+                const rawQ1 = document.getElementById('ans-eau-q1').value;
+                const rawQ2 = document.getElementById('ans-eau-q2').value;
+                const rawQ3 = document.getElementById('ans-eau-q3').value;
+
+                const q0 = cleanText(rawProb + " " + rawHyp);
+                const q1 = cleanText(rawQ1);
+                const q2 = cleanText(rawQ2);
+                const q3 = cleanText(rawQ3);
+                const allClean = [q0, q1, q2, q3].join(" ");
+                const allRaw = [rawProb, rawHyp, rawQ1, rawQ2, rawQ3].join(" ");
 
                 const c1 = /(paille|souffle|air)/.test(q1) && /(colorant|eau|deplace|droite|surface)/.test(q1);
                 const c2 = /(haute pression|basse pression|pression)/.test(q1);
@@ -1768,48 +2028,255 @@
                 const c7 = oceanMapScore >= 1;
                 const c8 = /(courant|vent|gyre|boucle)/.test(q3 + " " + q0) && /(dechet|plastique|henderson|ile|transporte|accumul)/.test(q3 + " " + q0);
 
-                const totalWords = (q0 + " " + q1 + " " + q2 + " " + q3).split(/\s+/).filter(Boolean).length;
-                const c_lang1 = totalWords >= 35 && /[.!?]/.test(document.getElementById('ans-eau-q1').value + document.getElementById('ans-eau-q2').value + document.getElementById('ans-eau-q3').value);
+                const wordCount = allClean.split(/\s+/).filter(Boolean).length;
+                const sentenceCount = countSentences(allRaw);
+                const connectorsFound = extractConnectorsFound(q3);
+                const c_lang1 = wordCount >= 35 && /[.!?]/.test(rawQ1 + rawQ2 + rawQ3);
                 const c_lang2 = /\b(car|donc|parce que|ainsi|en effet|par consequent|puisque|grace a|alors|cest pourquoi|de ce fait)\b/.test(q3);
 
                 const scoreD4 = (c1 ? 1 : 0) + (c2 ? 0.5 : 0) + (c4 ? 0.75 : 0) + (c5 ? 0.75 : 0) + oceanMapScore;
                 const scoreD1 = (c3 ? 1.5 : 0) + (c6 ? 1.5 : 0) + (c8 ? 1.0 : 0);
                 const scoreLang = (c_lang1 ? 1 : 0) + (c_lang2 ? 1 : 0);
                 const scoreTotal = Math.min(10, Math.round((scoreD4 + scoreD1 + scoreLang) * 100) / 100);
+                const scoreSur5 = Math.round((scoreTotal / 2) * 100) / 100;
+                const scoreSur20 = Math.round(scoreTotal * 20) / 10;
+                const mastery = getMasteryInfo(scoreTotal);
 
                 const critList = [
-                    { q: "Modèle 1 (D4)", desc: "Décrire l'action du souffle sur le colorant et l'eau de surface", ok: c1, pts: c1 ? "1 / 1" : "0 / 1" },
-                    { q: "Modèle 1 (D4)", desc: "Mentionner les zones de haute et basse pression créées par le souffle", ok: c2, pts: c2 ? "0.5 / 0.5" : "0 / 0.5" },
-                    { q: "Modèle 1 (D1)", desc: "Expliquer que les vents dominants entraînent les courants de surface", ok: c3, pts: c3 ? "1.5 / 1.5" : "0 / 1.5" },
-                    { q: "Modèle 2 (D4)", desc: "Décrire le passage de l'eau chaude en haut et de l'eau froide en bas", ok: (c4 && c5), pts: ((c4?0.75:0)+(c5?0.75:0)) + " / 1.5" },
-                    { q: "Modèle 2 (D1)", desc: "Expliquer par la densité (eau chaude moins dense / eau froide plus dense)", ok: c6, pts: c6 ? "1.5 / 1.5" : "0 / 1.5" },
-                    { q: "Carte (D4)", desc: "Tracer correctement au moins 4 flèches de courants sur l'Atlantique", ok: c7, pts: oceanMapScore + " / 1" },
-                    { q: "Réel (D1)", desc: "Expliquer le piégeage des déchets sur Henderson par les gyres océaniques", ok: c8, pts: c8 ? "1 / 1" : "0 / 1" },
-                    { q: "Langue (D1.1)", desc: "Phrases construites et ponctuées (majuscules, points)", ok: c_lang1, pts: c_lang1 ? "1 / 1" : "0 / 1" },
-                    { q: "Langue (D1.1)", desc: "Utiliser des connecteurs logiques (car, donc, ainsi...) dans l'explication du réel", ok: c_lang2, pts: c_lang2 ? "1 / 1" : "0 / 1" }
+                    { code: "EAU_MOD1", comp: "D4", q: "Modèle 1 (D4)", desc: "Décrire l'action du souffle sur le colorant et l'eau de surface", ok: c1, pts: c1 ? "1 / 1" : "0 / 1", motsReperees: findKeywordsInText(q1, ["paille", "souffle", "colorant", "eau", "surface"]), conseil: "À l'étape 2 (Modèle 1), décris précisément comment le souffle met en mouvement le colorant et l'eau de surface." },
+                    { code: "EAU_PRES", comp: "D4", q: "Modèle 1 (D4)", desc: "Mentionner les zones de haute et basse pression créées par le souffle", ok: c2, pts: c2 ? "0.5 / 0.5" : "0 / 0.5", motsReperees: findKeywordsInText(q1, ["haute pression", "basse pression", "pression"]), conseil: "Précise la notion de zones de pression créée par l'air soufflé à la surface de la bassine." },
+                    { code: "EAU_VENT", comp: "D1", q: "Modèle 1 (D1)", desc: "Expliquer que les vents dominants entraînent les courants de surface", ok: c3, pts: c3 ? "1.5 / 1.5" : "0 / 1.5", motsReperees: findKeywordsInText(q1, ["vents dominants", "vent", "courant", "surface", "entraine"]), conseil: "Relie ce que fait la paille dans le bac aux « vents dominants » qui poussent les « courants marins de surface » sur Terre." },
+                    { code: "EAU_MOD2", comp: "D4", q: "Modèle 2 (D4)", desc: "Décrire le passage de l'eau chaude en haut et de l'eau froide en bas", ok: (c4 && c5), pts: ((c4?0.75:0)+(c5?0.75:0)) + " / 1.5", motsReperees: findKeywordsInText(q2, ["eau chaude", "rouge", "haut", "monte", "eau froide", "bleu", "bas", "descend"]), conseil: "À l'étape 3 (Modèle 2), décris à la fois le niveau atteint par l'eau chaude (rouge) et celui atteint par l'eau froide (bleue)." },
+                    { code: "EAU_DENS", comp: "D1", q: "Modèle 2 (D1)", desc: "Expliquer par la densité (eau chaude moins dense / eau froide plus dense)", ok: c6, pts: c6 ? "1.5 / 1.5" : "0 / 1.5", motsReperees: findKeywordsInText(q2, ["densite", "moins dense", "plus dense", "leger", "lourd"]), conseil: "Mobilise le vocabulaire scientifique (« moins dense » / « plus dense ») pour expliquer la séparation verticale des deux eaux." },
+                    { code: "EAU_MAP", comp: "D4", q: "Carte (D4)", desc: "Tracer correctement au moins 4 flèches de courants sur l'Atlantique", ok: c7, pts: oceanMapScore + " / 1", motsReperees: [`${oceanMapScore} / 1 pt`], conseil: "À l'étape 2/4, trace au moins 4 flèches dans le bon sens sur la carte interactive des courants de l'Atlantique." },
+                    { code: "EAU_REAL", comp: "D1", q: "Réel (D1)", desc: "Expliquer le piégeage des déchets sur Henderson par les gyres océaniques", ok: c8, pts: c8 ? "1 / 1" : "0 / 1", motsReperees: findKeywordsInText(q3 + " " + q0, ["courant", "gyre", "boucle", "henderson", "plastique", "dechet", "accumul"]), conseil: "À l'étape 4 (Q3), explique comment les « gyres océaniques » (grandes boucles de courants) concentrent les plastiques jusqu'à Henderson." },
+                    { code: "LANG1", comp: "LANG", q: "Langue (D1.1)", desc: "Phrases construites et ponctuées (majuscules, points)", ok: c_lang1, pts: c_lang1 ? "1 / 1" : "0 / 1", motsReperees: [`${wordCount} mots`, `${sentenceCount} phrase(s)`], conseil: "" },
+                    { code: "LANG2", comp: "LANG", q: "Langue (D1.1)", desc: "Utiliser des connecteurs logiques (car, donc, ainsi...) dans l'explication du réel", ok: c_lang2, pts: c_lang2 ? "1 / 1" : "0 / 1", motsReperees: connectorsFound, conseil: "" }
                 ];
+
+                const diag = buildDiagnostics('eau', critList, allClean, q3, wordCount, sentenceCount, connectorsFound, oceanMapScore);
+                const copySections = [
+                    { label: "Étape 1 — Problème & Hypothèse", text: `${rawProb}\n${rawHyp}`.trim() },
+                    { label: "Étape 2 — Modèle 1 (Courants de surface)", text: rawQ1 },
+                    { label: "Étape 3 — Modèle 2 (Colonnes chaud/froid)", text: rawQ2 },
+                    { label: "Étape 4 — Retour au réel (Île Henderson)", text: rawQ3 }
+                ];
+
+                const q1Criteria = [critList[0], critList[1], critList[2], critList[5]];
+                const q2Criteria = [critList[3], critList[4], critList[6], critList[7], critList[8]];
 
                 return {
                     activite: "Dynamique des masses d'eau (Île Henderson)",
+                    theme: "eau",
                     nom, prenom, classe,
-                    scoreTotal, scoreD4, scoreD1, scoreLangue: scoreLang,
+                    scoreTotal, scoreSur5, scoreSur20,
+                    niveauMaitrise: mastery.code,
+                    scoreD4, scoreD1, scoreLangue: scoreLang,
+                    wordCount, sentenceCount, connectorsFound,
                     critList,
+                    erreursDetectees: diag.erreursDetectees,
+                    conseilsProgression: diag.conseilsProgression,
+                    atelierRemediation: diag.atelierRemediation,
+                    highlightedCopyHTML: highlightCopyHTML(copySections, 'eau'),
                     q1: {
                         intitule: "Courants de surface & Carte Atlantique",
-                        reponse: `[Problème/Hypothèse] ${document.getElementById('ans-eau-prob').value} / ${document.getElementById('ans-eau-hyp').value}\n[Q1] ${document.getElementById('ans-eau-q1').value}`,
+                        reponse: `[Problème/Hypothèse] ${rawProb} / ${rawHyp}\n[Q1] ${rawQ1}`,
                         score: (c1?1:0) + (c2?0.5:0) + (c3?1.5:0) + oceanMapScore,
-                        valides: critList.filter(x => x.ok).slice(0, 3).map(x => x.desc),
-                        manquants: critList.filter(x => !x.ok).slice(0, 3).map(x => x.desc)
+                        valides: q1Criteria.filter(x => x.ok).map(x => x.desc),
+                        manquants: q1Criteria.filter(x => !x.ok).map(x => x.desc)
                     },
                     q2: {
                         intitule: "Courants verticaux & Synthèse Henderson",
-                        reponse: `[Q2] ${document.getElementById('ans-eau-q2').value}\n[Q3] ${document.getElementById('ans-eau-q3').value}`,
+                        reponse: `[Q2] ${rawQ2}\n[Q3] ${rawQ3}`,
                         score: (c4?0.75:0) + (c5?0.75:0) + (c6?1.5:0) + (c8?1:0) + scoreLang,
-                        valides: critList.filter(x => x.ok).slice(3).map(x => x.desc),
-                        manquants: critList.filter(x => !x.ok).slice(3).map(x => x.desc)
+                        valides: q2Criteria.filter(x => x.ok).map(x => x.desc),
+                        manquants: q2Criteria.filter(x => !x.ok).map(x => x.desc)
                     }
                 };
             }
+        }
+
+        // Suivi des tentatives élève pour visualiser la progression (T1 -> T2)
+        const studentAttemptsHistory = {};
+        let lastRenderedEvals = [];
+
+        function getAttemptStorageKey(ev) {
+            return `svt_dyn_attempt_${(ev.theme || 'air')}_${cleanText(ev.nom)}_${cleanText(ev.prenom)}_${cleanText(ev.classe)}`;
+        }
+
+        function recordAttemptAndGetDelta(ev) {
+            const key = getAttemptStorageKey(ev);
+            let prev = studentAttemptsHistory[key];
+            if (!prev) {
+                try {
+                    const stored = localStorage.getItem(key);
+                    if (stored) prev = JSON.parse(stored);
+                } catch (e) {}
+            }
+            const attemptNum = prev ? (prev.attemptNum + 1) : 1;
+            const prevScore = prev ? prev.scoreTotal : null;
+            const delta = prevScore !== null ? Math.round((ev.scoreTotal - prevScore) * 100) / 100 : null;
+            const snapshot = { attemptNum, scoreTotal: ev.scoreTotal, ts: Date.now() };
+            studentAttemptsHistory[key] = snapshot;
+            try { localStorage.setItem(key, JSON.stringify(snapshot)); } catch (e) {}
+            return { attemptNum, prevScore, delta };
+        }
+
+        function improveStudentAnswers(theme) {
+            if (theme && (theme === 'air' || theme === 'eau')) {
+                switchTheme(theme);
+            }
+            setStep(4);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function renderStudentPostSendPanel(evalList, activeTabIdx = 0) {
+            const panel = document.getElementById('student-post-send-panel');
+            if (!panel || !evalList || !evalList.length) return;
+            lastRenderedEvals = evalList;
+            const ev = evalList[Math.min(activeTabIdx, evalList.length - 1)];
+            const mastery = getMasteryInfo(ev.scoreTotal);
+            const pct = Math.min(100, Math.round((ev.scoreTotal / 10) * 100));
+            const attemptInfo = ev._attemptInfo || { attemptNum: 1, prevScore: null, delta: null };
+
+            const deltaBadge = attemptInfo.delta !== null
+                ? `<span class="text-[11px] px-2.5 py-0.5 rounded-full font-bold ${attemptInfo.delta >= 0 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'}">${attemptInfo.delta >= 0 ? '+' : ''}${attemptInfo.delta} pt depuis tentative ${attemptInfo.attemptNum - 1}</span>`
+                : `<span class="text-[11px] px-2.5 py-0.5 rounded-full font-semibold bg-slate-800 text-slate-300 border border-slate-700">Tentative ${attemptInfo.attemptNum}</span>`;
+
+            const switcherHtml = evalList.length > 1 ? `
+                <div class="flex gap-2 mb-2">
+                    ${evalList.map((item, idx) => `
+                        <button type="button" onclick="renderStudentPostSendPanel(lastRenderedEvals, ${idx})"
+                            class="px-3 py-1.5 rounded-lg text-xs font-bold border transition ${idx === activeTabIdx
+                                ? 'bg-sky-500 text-slate-950 border-sky-400'
+                                : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'}">
+                            ${item.theme === 'air' ? '🌬️ Masses d\'Air' : '🌊 Masses d\'Eau'} (${item.scoreTotal}/10)
+                        </button>
+                    `).join('')}
+                </div>
+            ` : '';
+
+            const erreursHtml = ev.erreursDetectees.length
+                ? `<ul class="list-disc pl-4 space-y-1 text-amber-200/90 text-xs">${ev.erreursDetectees.map(e => `<li>${escapeHTML(e)}</li>`).join('')}</ul>`
+                : `<p class="text-xs text-emerald-300 font-semibold">✅ Aucune confusion majeure ni omission détectée dans ton raisonnement !</p>`;
+
+            const conseilsHtml = ev.conseilsProgression.map(c => `<li class="text-xs text-slate-200">${escapeHTML(c)}</li>`).join('');
+
+            const critRowsHtml = ev.critList.map(c => `
+                <tr class="hover:bg-slate-900/50">
+                    <td class="p-2.5 font-bold text-slate-200">${escapeHTML(c.q)}</td>
+                    <td class="p-2.5 text-slate-300">${escapeHTML(c.desc)}</td>
+                    <td class="p-2.5 text-center font-bold ${c.ok ? 'text-emerald-400' : 'text-red-400'}">${c.ok ? '✔ Validé' : '✖ Manquant'}</td>
+                    <td class="p-2.5 text-xs text-slate-400">${(c.motsReperees && c.motsReperees.length) ? escapeHTML(c.motsReperees.slice(0, 5).join(', ')) : '—'}</td>
+                    <td class="p-2.5 text-right font-semibold text-slate-200">${escapeHTML(c.pts)}</td>
+                </tr>
+            `).join('');
+
+            panel.innerHTML = `
+                <div class="bg-slate-900/95 p-6 rounded-2xl border border-emerald-500/40 shadow-2xl space-y-5">
+                    ${switcherHtml}
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <h2 class="text-base font-bold text-white flex items-center gap-2">
+                                <span>🎯</span>
+                                <span>Ton Bilan Immédiat — ${escapeHTML(ev.activite)}</span>
+                            </h2>
+                            <p class="text-[11px] text-slate-400 mt-0.5">Analyse automatique instantanée (le corrigé type complet reste verrouillé jusqu'au code professeur).</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            ${deltaBadge}
+                            <span class="text-xs px-2.5 py-1 rounded-full font-bold ${mastery.css}">${mastery.badge}</span>
+                        </div>
+                    </div>
+
+                    <!-- Barre de progression & 4 indicateurs -->
+                    <div>
+                        <div class="flex justify-between text-[11px] text-slate-400 mb-1">
+                            <span>Progression globale</span>
+                            <span class="font-bold text-slate-200">${ev.scoreTotal} / 10 (${ev.scoreSur20} / 20 · ${pct}%)</span>
+                        </div>
+                        <div class="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                            <div class="h-full ${mastery.bar} transition-all duration-500" style="width:${pct}%"></div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                            <div class="text-[11px] text-slate-400 font-semibold uppercase">Score Global</div>
+                            <div class="text-xl font-extrabold text-amber-400 mt-1">${ev.scoreTotal} / 10</div>
+                            <div class="text-[10px] text-slate-500">${ev.scoreSur5} / 5 · ${ev.scoreSur20} / 20</div>
+                        </div>
+                        <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                            <div class="text-[11px] text-slate-400 font-semibold uppercase">D4 — Démarche</div>
+                            <div class="text-xl font-extrabold text-sky-400 mt-1">${ev.scoreD4} / 4</div>
+                        </div>
+                        <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                            <div class="text-[11px] text-slate-400 font-semibold uppercase">D1 — Notions</div>
+                            <div class="text-xl font-extrabold text-purple-400 mt-1">${ev.scoreD1} / 4</div>
+                        </div>
+                        <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                            <div class="text-[11px] text-slate-400 font-semibold uppercase">Langue (D1.1)</div>
+                            <div class="text-xl font-extrabold text-emerald-400 mt-1">${ev.scoreLangue} / 2</div>
+                            <div class="text-[10px] text-slate-500">${ev.wordCount} mots · ${ev.connectorsFound.length} connecteur(s)</div>
+                        </div>
+                    </div>
+
+                    <!-- Erreurs & Confusions détectées -->
+                    <div class="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2">
+                        <h3 class="text-xs font-bold text-amber-300 uppercase tracking-wide">⚠️ Points à corriger / Confusions ou oublis repérés</h3>
+                        ${erreursHtml}
+                    </div>
+
+                    <!-- Conseils pour progresser & Remédiation en classe -->
+                    <div class="p-4 rounded-xl bg-sky-500/10 border border-sky-500/30 space-y-2">
+                        <h3 class="text-xs font-bold text-sky-300 uppercase tracking-wide">💡 Comment progresser & Atelier conseillé en classe</h3>
+                        <ul class="list-disc pl-4 space-y-1">${conseilsHtml}</ul>
+                        <div class="mt-2 p-2.5 rounded-lg bg-slate-950/80 border border-sky-500/25 text-xs text-sky-200">
+                            <strong>🛠️ Remédiation ciblée :</strong> ${escapeHTML(ev.atelierRemediation)}
+                        </div>
+                    </div>
+
+                    <!-- Grille critériée détaillée (sans dévoiler le corrigé type) -->
+                    <div class="overflow-x-auto rounded-xl border border-slate-800">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-slate-950 text-slate-400 border-b border-slate-800">
+                                    <th class="p-2.5">Étape</th>
+                                    <th class="p-2.5">Critère évalué</th>
+                                    <th class="p-2.5 text-center">Statut</th>
+                                    <th class="p-2.5">Indicateurs repérés</th>
+                                    <th class="p-2.5 text-right">Points</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800">${critRowsHtml}</tbody>
+                        </table>
+                    </div>
+
+                    <!-- Copie surlignée -->
+                    <div class="space-y-2">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <h3 class="text-xs font-bold text-slate-200">🔍 Ta copie analysée</h3>
+                            <div class="text-[11px] text-slate-400 flex items-center gap-3">
+                                <span><span class="bg-emerald-500/20 text-emerald-300 px-1.5 rounded font-semibold">Vert</span> = vocabulaire scientifique</span>
+                                <span><span class="bg-sky-500/25 text-sky-300 px-1.5 rounded underline">Bleu</span> = connecteurs logiques</span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">${ev.highlightedCopyHTML}</div>
+                    </div>
+
+                    <!-- Action améliorer et renvoyer -->
+                    <div class="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800">
+                        <p class="text-[11px] text-slate-400">Tu peux retravailler tes phrases à l'aide des conseils ci-dessus puis renvoyer une copie améliorée.</p>
+                        <button type="button" onclick="improveStudentAnswers('${ev.theme}')"
+                            class="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition shadow-md flex items-center gap-2">
+                            <span>✏️</span>
+                            <span>Améliorer mes réponses et renvoyer au professeur</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+            panel.classList.remove('hidden');
+            panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
         // =========================================================================
@@ -1825,17 +2292,25 @@
                 return;
             }
 
+            const evalList = Array.isArray(payload.submissions) ? payload.submissions : [payload];
+            evalList.forEach(ev => {
+                ev._attemptInfo = recordAttemptAndGetDelta(ev);
+            });
+
             statusBox.className = "mt-4 p-3.5 rounded-xl text-xs bg-sky-500/10 border border-sky-500/30 text-sky-300 block";
             statusBox.innerHTML = "⏳ Transmission de votre travail au professeur en cours...";
             btn.disabled = true;
 
-            const url = (window.SVT_CONFIG && window.SVT_CONFIG.GOOGLE_SHEET_WEBHOOK_URL) || "COLLEZ_VOTRE_URL_APPS_SCRIPT_ICI";
+            const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycby0QUI8Lc2y6gwRS3GrRWzJ9kYv6pAoaJyCbsVPvAl_ozOfsromNW9UJb3_nxx1vsxM/exec";
+            const cfgUrl = window.SVT_CONFIG && window.SVT_CONFIG.GOOGLE_SHEET_WEBHOOK_URL;
+            const url = (cfgUrl && cfgUrl !== "COLLEZ_VOTRE_URL_APPS_SCRIPT_ICI") ? cfgUrl : DEFAULT_GAS_URL;
 
             if (!url || url === "COLLEZ_VOTRE_URL_APPS_SCRIPT_ICI") {
                 // Sauvegarde locale de secours
                 localStorage.setItem(`svt_copie_${payload.nom}_${Date.now()}`, JSON.stringify(payload));
                 statusBox.className = "mt-4 p-3.5 rounded-xl text-xs bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 block";
-                statusBox.innerHTML = `✅ <strong>Travail validé et enregistré pour ${payload.prenom} ${payload.nom} (${payload.classe}) !</strong><br>(Mode hors-ligne : demandez le code de déverrouillage au professeur pour afficher votre bilan).`;
+                statusBox.innerHTML = `✅ <strong>Travail validé et enregistré pour ${escapeHTML(payload.prenom)} ${escapeHTML(payload.nom)} (${escapeHTML(payload.classe)}) !</strong><br>Découvre ton score et tes conseils pour progresser ci-dessous (mode hors-ligne ; le corrigé type complet reste verrouillé jusqu'au code professeur).`;
+                renderStudentPostSendPanel(evalList, 0);
                 btn.disabled = false;
                 return;
             }
@@ -1848,10 +2323,12 @@
                     body: JSON.stringify(payload)
                 });
                 statusBox.className = "mt-4 p-3.5 rounded-xl text-xs bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 block";
-                statusBox.innerHTML = `✅ <strong>Réponses transmises avec succès au professeur !</strong> (${payload.prenom} ${payload.nom} - ${payload.classe}).<br>Demandez maintenant le code correction au professeur pour afficher votre grille critériée ci-dessous.`;
+                statusBox.innerHTML = `✅ <strong>Réponses transmises avec succès au professeur !</strong> (${escapeHTML(payload.prenom)} ${escapeHTML(payload.nom)} - ${escapeHTML(payload.classe)}).<br>Consulte ci-dessous ton score, tes erreurs et les pistes pour progresser. Le corrigé type complet s'affichera après saisie du code professeur.`;
+                renderStudentPostSendPanel(evalList, 0);
             } catch (err) {
-                statusBox.className = "mt-4 p-3.5 rounded-xl text-xs bg-red-500/10 border border-red-500/30 text-red-300 block";
-                statusBox.innerHTML = "❌ Erreur réseau lors de l'envoi. Vérifiez votre connexion internet.";
+                statusBox.className = "mt-4 p-3.5 rounded-xl text-xs bg-amber-500/10 border border-amber-500/30 text-amber-300 block";
+                statusBox.innerHTML = "⚠️ Erreur réseau lors de l'envoi vers Google Sheets, mais ton bilan diagnostique est disponible ci-dessous avant de réessayer l'envoi.";
+                renderStudentPostSendPanel(evalList, 0);
             } finally {
                 btn.disabled = false;
             }

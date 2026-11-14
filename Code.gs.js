@@ -51,7 +51,9 @@ function doPost(e) {
         "Q2_Score_Sur_5",
         "Q2_Criteres_Valides",
         "Q2_Criteres_Manquants",
-        "JSON_Complet_Pour_App"
+        "JSON_Complet_Pour_App",
+        "Erreurs_Detectees",
+        "Pistes_Remediation"
       ];
       rawSheet.appendRow(headers);
       rawSheet.getRange(1, 1, 1, headers.length)
@@ -59,7 +61,14 @@ function doPost(e) {
         .setBackground("#1e293b")
         .setFontColor("#ffffff");
       rawSheet.setFrozenRows(1);
+    } else if (rawSheet.getLastColumn() < 26) {
+      // Migration douce d'un classeur existant (ajout des colonnes Y-Z sans toucher A-X)
+      rawSheet.getRange(1, 25).setValue("Erreurs_Detectees").setFontWeight("bold").setBackground("#1e293b").setFontColor("#ffffff");
+      rawSheet.getRange(1, 26).setValue("Pistes_Remediation").setFontWeight("bold").setBackground("#1e293b").setFontColor("#ffffff");
     }
+
+    // Force le format Texte sur la colonne C (Classe) pour éviter toute conversion auto
+    rawSheet.getRange("C:C").setNumberFormat("@");
 
     const results = [];
 
@@ -104,7 +113,9 @@ function doPost(e) {
         Number(data.q2?.score || 0),
         (data.q2?.valides || []).join(" | "),
         (data.q2?.manquants || []).join(" | "),
-        JSON.stringify(data)
+        JSON.stringify(data),
+        Array.isArray(data.erreursDetectees) ? data.erreursDetectees.join(" | ") : (data.erreursDetectees || ""),
+        [data.atelierRemediation || "", ...(Array.isArray(data.conseilsProgression) ? data.conseilsProgression : [])].filter(Boolean).join(" | ")
       ];
 
       rawSheet.appendRow(rowData);

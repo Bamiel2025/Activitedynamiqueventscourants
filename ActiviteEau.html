@@ -1,0 +1,1526 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVT Cycle 4 - La dynamique des masses d'eau</title>
+    <style>
+        :root {
+            --bg-dark: #0b1324;
+            --panel-bg: rgba(20, 32, 54, 0.95);
+            --card-bg: #152238;
+            --accent-blue: #38bdf8;
+            --accent-red: #f87171;
+            --accent-green: #22c55e;
+            --accent-amber: #f59e0b;
+            --text-light: #f1f5f9;
+            --border-col: #2d4263;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-light); overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+
+        /* Barre supérieure & Identification élève */
+        header {
+            background: #111c30;
+            padding: 10px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            border-bottom: 2px solid var(--border-col);
+            z-index: 30;
+        }
+        .header-left { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+        h1 { font-size: 1.1rem; font-weight: 700; color: var(--accent-blue); }
+
+        .student-bar {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            background: var(--bg-dark);
+            padding: 5px 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border-col);
+        }
+        .student-bar input, .student-bar select {
+            background: #1e293b;
+            color: #fff;
+            border: 1px solid #475569;
+            padding: 5px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+        .tab-btn {
+            background: #1e293b;
+            color: #cbd5e1;
+            border: 1px solid var(--border-col);
+            padding: 7px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+        .tab-btn.active { background: var(--accent-blue); color: #0b1324; border-color: var(--accent-blue); }
+        .tab-btn.bilan-tab { border-color: var(--accent-amber); color: #fcd34d; }
+        .tab-btn.bilan-tab.active { background: var(--accent-amber); color: #0b1324; }
+
+        /* Conteneur principal */
+        #main-container { position: relative; flex: 1; width: 100%; height: 100%; overflow: hidden; }
+        #canvas-container { width: 100%; height: 100%; display: block; }
+
+        /* Vues plein écran (Onglets 1, 4 et 5) */
+        .full-view {
+            position: absolute;
+            inset: 0;
+            background: var(--bg-dark);
+            z-index: 20;
+            overflow-y: auto;
+            padding: 24px 20px 50px 20px;
+            display: none;
+        }
+        .container-centered { max-width: 1040px; margin: 0 auto; }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-col);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+        }
+        .card h2 { font-size: 1.15rem; color: var(--accent-blue); margin-bottom: 10px; }
+        .card h3 { font-size: 0.98rem; color: #fcd34d; margin-bottom: 8px; }
+
+        /* Situation déclenchante */
+        .trigger-grid {
+            display: grid;
+            grid-template-columns: 1.15fr 1fr;
+            gap: 20px;
+            align-items: start;
+        }
+        @media (max-width: 850px) { .trigger-grid { grid-template-columns: 1fr; } }
+
+        .visual-doc {
+            background: #09101d;
+            border: 1px solid var(--border-col);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .visual-caption {
+            padding: 12px 14px;
+            font-size: 0.82rem;
+            color: #cbd5e1;
+            line-height: 1.45;
+            border-top: 1px solid var(--border-col);
+        }
+
+        /* Panneaux Modèles 3D (Onglets 2 et 3) */
+        .control-panel {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            width: 315px;
+            background: var(--panel-bg);
+            backdrop-filter: blur(8px);
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid var(--border-col);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            z-index: 10;
+            display: none;
+        }
+        .control-panel h2 { font-size: 1rem; margin-bottom: 6px; color: #fff; }
+        .objective { font-size: 0.8rem; color: #cbd5e1; margin-bottom: 12px; line-height: 1.35; border-left: 3px solid var(--accent-blue); padding-left: 8px; }
+        .control-group { margin-bottom: 12px; }
+        .control-group label { display: block; font-size: 0.82rem; margin-bottom: 5px; font-weight: 600; }
+        input[type="range"] { width: 100%; accent-color: var(--accent-blue); cursor: pointer; }
+
+        .btn-group { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+        .action-btn {
+            padding: 8px 14px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.82rem;
+            cursor: pointer;
+            background: var(--accent-green);
+            color: #fff;
+            transition: opacity 0.2s;
+        }
+        .action-btn.blue { background: #0284c7; }
+        .action-btn.reset { background: #475569; }
+        .action-btn.send-btn { background: #22c55e; padding: 13px 20px; font-size: 0.95rem; width: 100%; margin-top: 10px; }
+        .action-btn:hover { opacity: 0.92; }
+
+        .question-panel {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            width: 385px;
+            max-height: calc(100vh - 90px);
+            overflow-y: auto;
+            background: var(--panel-bg);
+            backdrop-filter: blur(8px);
+            padding: 18px;
+            border-radius: 12px;
+            border: 1px solid var(--border-col);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            z-index: 10;
+            display: none;
+        }
+        .question-panel h3 { font-size: 0.95rem; color: var(--accent-blue); margin-bottom: 6px; }
+        .comp-badge {
+            display: inline-block;
+            background: rgba(56, 189, 248, 0.15);
+            color: #7dd3fc;
+            border: 1px solid #0284c7;
+            font-size: 0.72rem;
+            padding: 2px 7px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        .question-prompt { font-size: 0.83rem; color: #e2e8f0; margin-bottom: 10px; line-height: 1.4; }
+        textarea.student-answer {
+            width: 100%;
+            min-height: 105px;
+            background: #09101d;
+            color: #fff;
+            border: 1px solid #475569;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            resize: vertical;
+        }
+        textarea.student-answer:focus { outline: 2px solid var(--accent-blue); border-color: transparent; }
+        .word-counter { font-size: 0.74rem; color: #94a3b8; text-align: right; margin-top: 4px; }
+
+        /* Onglet 4 : Carte interactive des courants */
+        .consigne-banner {
+            background: rgba(14, 165, 233, 0.12);
+            border: 1px solid #0284c7;
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-size: 0.86rem;
+            line-height: 1.45;
+            margin-bottom: 14px;
+        }
+        .interactive-map-wrap {
+            background: #0c192c;
+            border: 1px solid var(--border-col);
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+            user-select: none;
+            touch-action: none;
+        }
+
+        /* Grille critériée */
+        .score-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+        .score-box { background: #09101d; border: 1px solid var(--border-col); padding: 14px; border-radius: 8px; text-align: center; }
+        .score-box .big { font-size: 1.5rem; font-weight: 800; color: var(--accent-blue); margin-top: 4px; }
+        .criteria-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.84rem; }
+        .criteria-table th, .criteria-table td { border: 1px solid var(--border-col); padding: 9px 12px; text-align: left; }
+        .criteria-table th { background: #09101d; color: #cbd5e1; }
+        .crit-ok { color: #4ade80; font-weight: 600; }
+        .crit-ko { color: #f87171; }
+
+        .status-banner { padding: 12px 16px; border-radius: 8px; margin-top: 12px; font-size: 0.86rem; display: none; }
+        .status-banner.success { background: rgba(34, 197, 94, 0.2); border: 1px solid #22c55e; color: #bbf7d0; }
+        .status-banner.error { background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fecaca; }
+        .status-banner.warn { background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #fde68a; }
+
+        .post-send-card { border: 1px solid #22c55e; box-shadow: 0 10px 28px rgba(16, 185, 129, 0.16); }
+        .mastery-pill { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 0.76rem; font-weight: 700; }
+        .pill-tbm { background: rgba(34, 197, 94, 0.2); color: #86efac; border: 1px solid rgba(34, 197, 94, 0.5); }
+        .pill-ms  { background: rgba(56, 189, 248, 0.2); color: #7dd3fc; border: 1px solid rgba(56, 189, 248, 0.5); }
+        .pill-mf  { background: rgba(245, 158, 11, 0.2); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.5); }
+        .pill-mi  { background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.5); }
+        .diag-box { padding: 12px 14px; border-radius: 8px; margin-top: 12px; font-size: 0.83rem; line-height: 1.5; }
+        .diag-box.err { background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); color: #fde68a; }
+        .diag-box.rem { background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.35); color: #e0f2fe; }
+        .diag-box ul { margin: 6px 0 0 18px; }
+        .progress-track { width: 100%; height: 10px; background: #09101d; border: 1px solid #2d4263; border-radius: 999px; overflow: hidden; margin: 8px 0 14px; }
+        .progress-fill { height: 100%; transition: width 0.4s ease; }
+        .hl-sci { background: rgba(34, 197, 94, 0.22); color: #86efac; padding: 1px 4px; border-radius: 4px; font-weight: 600; }
+        .hl-conn { background: rgba(56, 189, 248, 0.24); color: #7dd3fc; padding: 1px 4px; border-radius: 4px; text-decoration: underline; }
+        .copy-block { background: #09101d; border: 1px solid #2d4263; border-radius: 8px; padding: 10px 12px; font-size: 0.81rem; line-height: 1.5; }
+
+        /* Étiquettes 3D */
+        #labels-container { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 5; }
+        .label-3d {
+            position: absolute;
+            background: rgba(15, 23, 42, 0.88);
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.76rem;
+            font-weight: 600;
+            border: 1px solid #64748b;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+        }
+        .label-3d.hot { border-color: var(--accent-red); color: #fca5a5; }
+        .label-3d.cold { border-color: var(--accent-blue); color: #bae6fd; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="config.example.js"></script>
+    <script src="config.local.js" onerror="void 0"></script>
+</head>
+<body>
+
+<header>
+    <div class="header-left">
+        <h1>🌊 SVT Cycle 4 : La dynamique des masses d'eau</h1>
+        <div class="student-bar">
+            <input type="text" id="st-nom" placeholder="NOM" style="width:105px;">
+            <input type="text" id="st-prenom" placeholder="Prénom" style="width:105px;">
+            <select id="st-classe">
+                <option value="">Classe...</option>
+                <option value="4eme1">4ème 1</option>
+                <option value="4eme2">4ème 2</option>
+                <option value="4eme3">4ème 3</option>
+                <option value="4eme4">4ème 4</option>
+                <option value="4eme5">4ème 5</option>
+                <option value="4eme6">4ème 6</option>
+                <option value="4eme7">4ème 7</option>
+                <option value="4A">4e A</option>
+                <option value="4B">4e B</option>
+                <option value="4C">4e C</option>
+                <option value="5A">5e A</option>
+                <option value="5B">5e B</option>
+                <option value="3A">3e A</option>
+            </select>
+        </div>
+    </div>
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchMode('trigger')">1. Situation déclenchante</button>
+        <button class="tab-btn" onclick="switchMode('horizontal')">2. Modèle : Courants de surface</button>
+        <button class="tab-btn" onclick="switchMode('vertical')">3. Modèle : Courants profonds</button>
+        <button class="tab-btn" onclick="switchMode('real')">4. Comprendre le réel</button>
+        <button class="tab-btn bilan-tab" onclick="switchMode('bilan')">🔒 5. Bilan & Envoi</button>
+    </div>
+</header>
+
+<div id="main-container">
+    <div id="canvas-container"></div>
+    <div id="labels-container"></div>
+
+    <!-- ==================== ONGLET 1 : SITUATION DÉCLENCHANTE ==================== -->
+    <div id="view-trigger" class="full-view" style="display: block;">
+        <div class="container-centered">
+            <div class="card">
+                <h2>🌍 Situation déclenchante : Le mystère des plages de l'île Henderson</h2>
+                <div class="trigger-grid">
+                    
+                    <!-- Illustration documentaire intégrée : Île Henderson + Carte d'isolement 5500 km -->
+                    <div class="visual-doc">
+                        <svg viewBox="0 0 650 380" width="100%" style="display:block; background:#071526;">
+                            <defs>
+                                <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="#0284c7"/>
+                                    <stop offset="55%" stop-color="#bae6fd"/>
+                                    <stop offset="56%" stop-color="#0369a1"/>
+                                    <stop offset="100%" stop-color="#0c4a6e"/>
+                                </linearGradient>
+                                <linearGradient id="sandGrad" x1="0" y1="0" x2="1" y2="1">
+                                    <stop offset="0%" stop-color="#fde68a"/>
+                                    <stop offset="100%" stop-color="#d97706"/>
+                                </linearGradient>
+                            </defs>
+                            <!-- Ciel et Océan Pacifique -->
+                            <rect x="0" y="0" width="650" height="230" fill="url(#skyGrad)"/>
+                            <!-- Falaise corallienne et végétation de l'atoll soulevé d'Henderson -->
+                            <path d="M 430 210 Q 470 120 550 115 L 650 115 L 650 230 Z" fill="#15803d"/>
+                            <path d="M 450 210 L 475 160 L 650 160 L 650 230 Z" fill="#78716c"/>
+                            <!-- Plage de sable envahie de déchets plastiques -->
+                            <path d="M 0 215 Q 260 190 650 235 L 650 380 L 0 380 Z" fill="url(#sandGrad)"/>
+                            <!-- Vagues d'écume -->
+                            <path d="M 0 215 Q 250 192 650 235" stroke="#e0f2fe" stroke-width="5" fill="none" opacity="0.85"/>
+                            
+                            <!-- Accumulation de déchets plastiques multicolores sur la plage -->
+                            <g>
+                                <!-- Bidons, bouteilles, bouées de pêche, caisses -->
+                                <rect x="45" y="250" width="28" height="16" rx="4" fill="#ef4444" transform="rotate(-15 45 250)"/>
+                                <circle cx="95" cy="268" r="11" fill="#f97316"/>
+                                <rect x="130" y="242" width="34" height="18" rx="3" fill="#3b82f6" transform="rotate(12 130 242)"/>
+                                <rect x="180" y="265" width="24" height="13" rx="3" fill="#22c55e" transform="rotate(-8 180 265)"/>
+                                <circle cx="235" cy="255" r="14" fill="#eab308"/>
+                                <rect x="275" y="275" width="38" height="20" rx="4" fill="#ec4899" transform="rotate(20 275 275)"/>
+                                <rect x="340" y="250" width="25" height="14" rx="2" fill="#06b6d4" transform="rotate(-18 340 250)"/>
+                                <circle cx="395" cy="285" r="12" fill="#ef4444"/>
+                                <rect x="440" y="265" width="32" height="16" rx="3" fill="#a855f7" transform="rotate(8 440 265)"/>
+                                <rect x="505" y="285" width="30" height="15" rx="3" fill="#3b82f6" transform="rotate(-12 505 285)"/>
+                                <circle cx="565" cy="272" r="13" fill="#22c55e"/>
+                                <!-- Filets et débris -->
+                                <path d="M 70 295 Q 120 270 165 305 Q 210 325 250 295" stroke="#0f172a" stroke-width="3" stroke-dasharray="5,3" fill="none"/>
+                                <rect x="85" y="310" width="22" height="12" fill="#f43f5e" transform="rotate(25 85 310)"/>
+                                <rect x="195" y="315" width="28" height="14" fill="#38bdf8" transform="rotate(-10 195 315)"/>
+                                <rect x="315" y="318" width="26" height="15" fill="#facc15" transform="rotate(14 315 318)"/>
+                                <rect x="420" y="310" width="35" height="16" fill="#fb7185" transform="rotate(-6 420 310)"/>
+                            </g>
+
+                            <!-- Encart Carte de localisation Pacifique Sud -->
+                            <g transform="translate(16, 16)">
+                                <rect x="0" y="0" width="290" height="155" rx="8" fill="#091526" stroke="#38bdf8" stroke-width="1.5" opacity="0.94"/>
+                                <text x="12" y="20" fill="#38bdf8" font-size="11" font-weight="bold">📍 CARTE : OCÉAN PACIFIQUE SUD</text>
+                                <!-- Australie / NZ à gauche -->
+                                <path d="M 18 85 L 48 75 L 55 105 L 25 115 Z" fill="#334155"/>
+                                <text x="14" y="130" fill="#94a3b8" font-size="9">Nouvelle-Zélande</text>
+                                <!-- Amérique du Sud à droite -->
+                                <path d="M 245 35 L 272 45 L 265 135 L 250 145 Z" fill="#334155"/>
+                                <text x="200" y="145" fill="#94a3b8" font-size="9">Amérique du Sud</text>
+                                <!-- Île Henderson au centre -->
+                                <circle cx="145" cy="90" r="5" fill="#ef4444"/>
+                                <circle cx="145" cy="90" r="11" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="3,2"/>
+                                <text x="108" y="73" fill="#fca5a5" font-size="10.5" font-weight="bold">Île Henderson</text>
+                                <!-- Flèche de distance 5 500 km -->
+                                <line x1="153" y1="90" x2="248" y2="90" stroke="#fcd34d" stroke-width="2" stroke-dasharray="4,3"/>
+                                <text x="168" y="84" fill="#fcd34d" font-size="10" font-weight="bold">↔ 5 500 km</text>
+                                <line x1="55" y1="90" x2="137" y2="90" stroke="#fcd34d" stroke-width="2" stroke-dasharray="4,3"/>
+                                <text x="64" y="84" fill="#fcd34d" font-size="10" font-weight="bold">↔ 5 000 km</text>
+                            </g>
+
+                            <!-- Bandeau titre sur l'image -->
+                            <rect x="16" y="335" width="618" height="32" rx="6" fill="rgba(15,23,42,0.88)"/>
+                            <text x="28" y="356" fill="#f8fafc" font-size="12.5" font-weight="bold">📸 Plus de 38 millions de débris plastiques (18 tonnes) recensés sur les plages d'Henderson !</text>
+                        </svg>
+                        <div class="visual-caption">
+                            <strong>Constat scientifique :</strong> L'île Henderson est un atoll corallien <strong>totalement inhabité</strong> situé au milieu du Pacifique Sud, à plus de <strong>5 500 km</strong> des côtes sud-américaines. Pourtant, ses plages affichent la plus forte densité de déchets plastiques au monde, provenant d'Amérique du Sud, d'Asie et de bateaux de pêche.
+                        </div>
+                    </div>
+
+                    <!-- Formulation du Problème & de l'Hypothèse -->
+                    <div>
+                        <span class="comp-badge">Démarche scientifique • Problème & Hypothèse</span>
+                        <h3>1. Formuler le problème scientifique</h3>
+                        <p class="question-prompt">
+                            À partir du constat ci-contre, rédigez la question scientifique (le <strong>problème</strong>) que l'on cherche à résoudre dans cette séance :
+                        </p>
+                        <textarea id="ans-prob" class="student-answer" style="min-height:75px;" placeholder="Comment expliquer... ?"></textarea>
+
+                        <h3 style="margin-top:16px;">2. Proposer une hypothèse</h3>
+                        <p class="question-prompt">
+                            Proposez une <strong>hypothèse</strong> expliquant comment ces déchets flottants ont pu parcourir plus de $5\,500\text{ km}$ jusqu'à cette île isolée :
+                        </p>
+                        <textarea id="ans-hyp" class="student-answer" style="min-height:75px;" placeholder="On peut penser que..."></textarea>
+
+                        <div class="btn-group" style="margin-top:14px;">
+                            <button class="action-btn blue" onclick="document.getElementById('helper-trigger-eau').style.display='block'">💡 Vérifier ma démarche (Problème & Hypothèse retenus)</button>
+                            <button class="action-btn" onclick="switchMode('horizontal')">👉 Passer aux modèles 3D pour tester l'hypothèse</button>
+                        </div>
+
+                        <div id="helper-trigger-eau" style="display:none; margin-top:14px; background:rgba(34,197,94,0.12); border:1px solid #22c55e; padding:12px; border-radius:8px; font-size:0.83rem; line-height:1.45;">
+                            ✅ <strong>Problème retenu :</strong> <em>Comment expliquer l'accumulation de déchets sur l'île Henderson alors qu'elle est complètement isolée des côtes ($5\,500\text{ km}$) ?</em><br><br>
+                            ✅ <strong>Hypothèse retenue :</strong> <em>On peut penser que des <strong>courants marins</strong> transportent ces objets flottants à travers l'océan et sont à l'origine de cette accumulation.</em>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== ONGLET 2 : MODÈLE 3D COURANTS HORIZONTAUX ==================== -->
+    <div id="panel-horizontal" class="control-panel">
+        <h2>Modèle 1 : Les courants horizontaux</h2>
+        <p class="objective">On cherche à expliquer comment un objet flottant (ou un déchet plastique) peut traverser un océan en modélisant un courant à la surface de l'eau.</p>
+        
+        <div class="control-group">
+            <label for="wind-slider">Souffle dans la paille (Vent) : <span id="wind-val">0</span> %</label>
+            <input type="range" id="wind-slider" min="0" max="100" value="0" oninput="updateWind(this.value)">
+        </div>
+
+        <div class="btn-group">
+            <button class="action-btn" onclick="updateWind(80); document.getElementById('wind-slider').value=80;">💨 Souffler (État final)</button>
+            <button class="action-btn reset" onclick="resetHorizontal()">🔄 État initial</button>
+        </div>
+    </div>
+
+    <div id="qpanel-horizontal" class="question-panel">
+        <span class="comp-badge">Compétences D4 & D1 • Barème : / 4 pts</span>
+        <h3>Question 1 : Les courants océaniques de surface</h3>
+        <p class="question-prompt">
+            À partir du modèle 3D (état initial / état final), <strong>décrivez le résultat du modèle</strong> (déplacement de l'eau et du colorant, zones de haute et basse pression) puis <strong>expliquez ce qui met en mouvement les courants océaniques de surface</strong>.
+        </p>
+        <textarea id="ans-q1" class="student-answer" placeholder="Rédigez votre réponse complète ici (description de ce qu'on observe dans le cristallisoir + rôle de la pression et des vents dominants)..." oninput="updateWordCount('ans-q1', 'wc-q1')"></textarea>
+        <div class="word-counter" id="wc-q1">0 mot</div>
+    </div>
+
+    <!-- ==================== ONGLET 3 : MODÈLE 3D COURANTS VERTICAUX ==================== -->
+    <div id="panel-vertical" class="control-panel">
+        <h2>Modèle 2 : Les courants verticaux</h2>
+        <p class="objective">On cherche à expliquer l'origine des mouvements océaniques profonds en modélisant les échanges entre l'eau chaude (rouge) et l'eau froide (bleue).</p>
+
+        <div class="btn-group">
+            <button class="action-btn" onclick="startVerticalExchange()">🔓 Ouvrir les tubes (État final)</button>
+            <button class="action-btn reset" onclick="resetVertical()">🔄 État initial</button>
+        </div>
+    </div>
+
+    <div id="qpanel-vertical" class="question-panel">
+        <span class="comp-badge">Compétences D4 & D1 • Barème : / 4 pts</span>
+        <h3>Question 2 : Déplacement vertical des masses d'eau</h3>
+        <p class="question-prompt">
+            Après avoir ouvert les tubes reliant les deux colonnes, <strong>décrivez le trajet de l'eau chaude (rouge) et de l'eau froide (bleue)</strong> entre l'état initial et l'état final, puis <strong>expliquez pourquoi ces masses d'eau se déplacent ainsi</strong> (en utilisant la notion de densité).
+        </p>
+        <textarea id="ans-q2" class="student-answer" placeholder="Rédigez votre réponse complète ici (trajet de l'eau chaude, trajet de l'eau froide, état final et explication par la densité)..." oninput="updateWordCount('ans-q2', 'wc-q2')"></textarea>
+        <div class="word-counter" id="wc-q2">0 mot</div>
+    </div>
+
+    <!-- ==================== ONGLET 4 : COMPRENDRE LE RÉEL (CARTE & SCHÉMA ANIMÉ) ==================== -->
+    <div id="view-real" class="full-view">
+        <div class="container-centered">
+            
+            <!-- Activité interactive 1 : Carte des courants marins de l'Atlantique Nord (Points 1 à 6) -->
+            <div class="card">
+                <h2>🗺️ 1. Activité interactive : Tracer le sens des courants marins de surface</h2>
+                <div class="consigne-banner">
+                    ℹ️ <strong>Consigne :</strong> Carte des courants marins de l'Atlantique Nord. <strong style="color:#f87171;">Rouge = courant chaud</strong>, <strong style="color:#38bdf8;">Bleu = courant froid</strong>.<br>
+                    Les <strong>flèches grises</strong> représentent les <strong>vents dominants</strong> (ils entraînent les courants de surface).<br>
+                    👉 À partir de chaque point numéroté (<strong>1 à 6</strong>), <strong>glisse avec ta souris ou ton doigt pour orienter la flèche</strong> dans le sens du courant, puis clique sur « <strong>Vérifier</strong> » !
+                </div>
+
+                <div class="interactive-map-wrap">
+                    <svg id="ocean-map-svg" viewBox="0 0 850 470" width="100%" style="display:block;">
+                        <defs>
+                            <marker id="arrowGray" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                                <path d="M 0 1 L 10 5 L 0 9 z" fill="#94a3b8"/>
+                            </marker>
+                            <marker id="arrowUser" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 1 L 10 5 L 0 9 z" fill="#facc15"/>
+                            </marker>
+                            <marker id="arrowOk" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 1 L 10 5 L 0 9 z" fill="#22c55e"/>
+                            </marker>
+                            <marker id="arrowKo" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444"/>
+                            </marker>
+                        </defs>
+
+                        <!-- Fond Océan Atlantique Nord -->
+                        <rect width="850" height="470" fill="#0c243c"/>
+
+                        <!-- Masses continentales stylisées fidèles à votre document -->
+                        <!-- Amérique du Nord -->
+                        <path d="M 0 0 L 210 0 L 185 180 L 135 230 L 160 250 L 95 295 L 40 340 L 0 390 Z" fill="#293d2b" stroke="#475569" stroke-width="1.5"/>
+                        <text x="35" y="135" fill="#94a3b8" font-size="12" font-weight="bold">AMÉRIQUE DU NORD</text>
+
+                        <!-- Groenland -->
+                        <path d="M 265 0 L 395 0 L 365 110 L 320 155 L 285 95 Z" fill="#293d2b" stroke="#475569" stroke-width="1.5"/>
+                        <text x="295" y="62" fill="#94a3b8" font-size="11" font-weight="bold">GROENLAND</text>
+
+                        <!-- Islande -->
+                        <ellipse cx="520" cy="112" rx="38" ry="22" fill="#293d2b" stroke="#475569" stroke-width="1.5"/>
+                        <text x="502" y="150" fill="#94a3b8" font-size="10">Islande</text>
+
+                        <!-- Royaume-Uni / Irlande -->
+                        <ellipse cx="670" cy="182" rx="14" ry="26" fill="#293d2b" stroke="#475569" stroke-width="1.5"/>
+                        <ellipse cx="615" cy="195" rx="11" ry="16" fill="#293d2b" stroke="#475569" stroke-width="1.5"/>
+
+                        <!-- Europe -->
+                        <path d="M 790 0 L 850 0 L 850 310 L 630 305 L 615 255 L 690 225 L 725 180 Z" fill="#293d2b" stroke="#475569" stroke-width="1.5"/>
+                        <text x="735" y="245" fill="#94a3b8" font-size="12" font-weight="bold">EUROPE</text>
+
+                        <!-- Afrique -->
+                        <path d="M 625 315 L 850 320 L 850 470 L 540 470 L 560 400 Z" fill="#293d2b" stroke="#475569" stroke-width="1.5"/>
+                        <text x="730" y="395" fill="#94a3b8" font-size="12" font-weight="bold">AFRIQUE</text>
+
+                        <!-- Groupe des Vents Dominants (affichable/masquable) -->
+                        <g id="dominant-winds-layer">
+                            <text x="355" y="188" fill="#cbd5e1" font-size="11.5" font-style="italic" font-weight="bold">Vents d'ouest (Westerlies)</text>
+                            <line x1="320" y1="205" x2="355" y2="205" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#arrowGray)"/>
+                            <line x1="395" y1="215" x2="430" y2="212" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#arrowGray)"/>
+                            <line x1="470" y1="203" x2="505" y2="203" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#arrowGray)"/>
+
+                            <text x="365" y="385" fill="#cbd5e1" font-size="11.5" font-style="italic" font-weight="bold">Alizés (Trade winds)</text>
+                            <line x1="350" y1="402" x2="315" y2="402" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#arrowGray)"/>
+                            <line x1="425" y1="412" x2="390" y2="412" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#arrowGray)"/>
+                            <line x1="500" y1="402" x2="465" y2="405" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#arrowGray)"/>
+                        </g>
+
+                        <!-- Rubans des Courants Marins -->
+                        <!-- Gulf Stream + Dérive Nord-Atlantique (Rouge - Chaud) -->
+                        <path d="M 30 375 C 95 290, 145 255, 250 245 C 390 230, 560 225, 680 185" fill="none" stroke="#dc2626" stroke-width="11" stroke-linecap="round"/>
+                        <text x="230" y="228" fill="#fca5a5" font-size="12" font-weight="bold">Gulf Stream (chaud)</text>
+                        <text x="480" y="212" fill="#fca5a5" font-size="11" font-weight="bold">Dérive Nord-Atlantique (chaud)</text>
+
+                        <!-- Courant du Labrador (Bleu - Froid) -->
+                        <path d="M 212 150 C 195 200, 180 230, 162 252" fill="none" stroke="#0284c7" stroke-width="10" stroke-linecap="round"/>
+                        <text x="92" y="178" fill="#7dd3fc" font-size="11" font-weight="bold">Courant du</text>
+                        <text x="92" y="191" fill="#7dd3fc" font-size="11" font-weight="bold">Labrador (froid)</text>
+
+                        <!-- Courant des Canaries (Bleu - Froid) -->
+                        <path d="M 625 265 C 600 325, 580 375, 560 412" fill="none" stroke="#0284c7" stroke-width="10" stroke-linecap="round"/>
+                        <text x="485" y="340" fill="#7dd3fc" font-size="11" font-weight="bold">Courant des Canaries (froid)</text>
+
+                        <!-- Courant équatorial (Rouge - Chaud) -->
+                        <path d="M 550 430 C 380 438, 200 438, 60 430" fill="none" stroke="#dc2626" stroke-width="11" stroke-linecap="round"/>
+                        <text x="265" y="420" fill="#fca5a5" font-size="11" font-weight="bold">Courant équatorial (chaud)</text>
+
+                        <!-- Calque des flèches tracées par l'élève -->
+                        <g id="user-arrows-ocean"></g>
+
+                        <!-- Calque des points numérotés 1 à 6 -->
+                        <g id="nodes-ocean"></g>
+                    </svg>
+                </div>
+
+                <div class="btn-group" style="margin-top:12px; align-items:center;">
+                    <button class="action-btn" onclick="verifyOceanMap()">✔ Vérifier</button>
+                    <button class="action-btn blue" onclick="showOceanMapCorrection()">👁️ Voir la correction</button>
+                    <button class="action-btn reset" onclick="resetOceanMap()">↺ Effacer</button>
+                    <label style="margin-left:12px; font-size:0.84rem; cursor:pointer; display:inline-flex; align-items:center; gap:6px; background:#1e293b; padding:7px 12px; border-radius:6px;">
+                        <input type="checkbox" checked onchange="document.getElementById('dominant-winds-layer').style.display = this.checked ? 'block' : 'none'">
+                        💨 Afficher les vents dominants
+                    </label>
+                    <span id="ocean-map-feedback" style="font-size:0.85rem; font-weight:600; margin-left:8px;"></span>
+                </div>
+            </div>
+
+            <!-- Schéma fonctionnel animé 2 : Circulation océanique globale + Retour à l'île Henderson -->
+            <div class="card">
+                <h2>🌊 2. Le Moteur Universel : Circulation océanique (Courants chauds de surface & Courants froids profonds)</h2>
+                <div style="background:#071526; border:1px solid var(--border-col); border-radius:10px; padding:16px; margin-bottom:16px;">
+                    <svg viewBox="0 0 800 250" width="100%" style="display:block;">
+                        <defs>
+                            <linearGradient id="oceanDepthGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#0284c7"/>
+                                <stop offset="100%" stop-color="#082f49"/>
+                            </linearGradient>
+                            <marker id="arrRed" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+                                <path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444"/>
+                            </marker>
+                            <marker id="arrBlue" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+                                <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+                            </marker>
+                        </defs>
+                        <!-- En-têtes Équateur / Pôle -->
+                        <text x="40" y="30" fill="#f87171" font-size="14" font-weight="bold">ÉQUATEUR (Eau chaude)</text>
+                        <text x="585" y="30" fill="#38bdf8" font-size="14" font-weight="bold">PÔLE (Eau froide &amp; dense)</text>
+                        
+                        <!-- Masse océanique -->
+                        <rect x="15" y="45" width="770" height="190" rx="8" fill="url(#oceanDepthGrad)"/>
+
+                        <!-- Courant chaud de surface (Équateur -> Pôle) -->
+                        <path d="M 110 92 Q 400 72 690 95" fill="none" stroke="#ef4444" stroke-width="9" stroke-linecap="round" marker-end="url(#arrRed)"/>
+                        <text x="400" y="68" text-anchor="middle" fill="#fca5a5" font-size="12" font-weight="bold">Courant chaud de surface : Équateur ➔ Pôle (ex: Gulf Stream)</text>
+
+                        <!-- Plongée des eaux froides au Pôle -->
+                        <path d="M 710 110 Q 730 145 705 175" fill="none" stroke="#38bdf8" stroke-width="4" stroke-dasharray="6,4" marker-end="url(#arrBlue)"/>
+
+                        <!-- Courant froid profond (Pôle -> Équateur) -->
+                        <path d="M 690 190 Q 400 210 115 188" fill="none" stroke="#38bdf8" stroke-width="9" stroke-linecap="round" marker-end="url(#arrBlue)"/>
+                        <text x="400" y="225" text-anchor="middle" fill="#bae6fd" font-size="12" font-weight="bold">Courant froid profond : Pôle ➔ Équateur (l'eau froide plus dense plonge)</text>
+
+                        <!-- Remontée à l'Équateur -->
+                        <path d="M 95 175 Q 75 140 98 108" fill="none" stroke="#f87171" stroke-width="4" stroke-dasharray="6,4" marker-end="url(#arrRed)"/>
+
+                        <!-- Particules blanches animées -->
+                        <circle r="4.5" fill="#fff">
+                            <animateMotion dur="6s" repeatCount="indefinite" path="M 110 92 Q 400 72 690 95 L 705 190 Q 400 210 115 188 Z"/>
+                        </circle>
+                        <circle r="4.5" fill="#fff">
+                            <animateMotion dur="6s" begin="2s" repeatCount="indefinite" path="M 110 92 Q 400 72 690 95 L 705 190 Q 400 210 115 188 Z"/>
+                        </circle>
+                        <circle r="4.5" fill="#fff">
+                            <animateMotion dur="6s" begin="4s" repeatCount="indefinite" path="M 110 92 Q 400 72 690 95 L 705 190 Q 400 210 115 188 Z"/>
+                        </circle>
+                    </svg>
+                </div>
+
+                <span class="comp-badge">Synthèse & Retour à la situation déclenchante • Barème : / 2 pts</span>
+                <h3>Question 3 : Répondre au problème initial de l'île Henderson</h3>
+                <p class="question-prompt">
+                    À l'aide de la carte interactive et des modèles, <strong>expliquez comment les déchets plastiques jetés à des milliers de kilomètres s'accumulent sur les plages de l'île Henderson</strong> (précisez le lien entre vents dominants, courants de surface et boucles de courants / gyres océaniques).
+                </p>
+                <textarea id="ans-q3" class="student-answer" style="min-height:85px;" placeholder="Pour conclure sur l'île Henderson, expliquez comment les vents dominants et les courants marins de surface transportent et concentrent ces déchets..."></textarea>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ==================== ONGLET 5 : BILAN, ENVOI SIMPLIFIÉ & CORRECTION VERROUILLÉE ==================== -->
+    <div id="view-bilan" class="full-view">
+        <div class="container-centered">
+            
+            <!-- Étape 1 : Envoi en 1 clic sans aucun champ URL pour l'élève -->
+            <div class="card">
+                <h2>📤 Étape 1 : Envoyer mon travail au professeur</h2>
+                <p style="font-size:0.88rem; color:#cbd5e1; margin-bottom:10px;">
+                    Vérifiez que vos <strong>NOM, Prénom et Classe</strong> sont bien renseignés dans le bandeau en haut de l'écran, puis cliquez sur le bouton ci-dessous pour transmettre directement vos réponses au professeur.
+                </p>
+                <button class="action-btn send-btn" onclick="submitToGoogleSheet()">📨 Envoyer mes réponses au professeur</button>
+                <div id="send-status" class="status-banner"></div>
+            </div>
+
+            <!-- Panneau Bilan Immédiat Élève (affiché après envoi, sans révéler le corrigé type verrouillé) -->
+            <div id="student-post-send-panel" style="display: none;"></div>
+
+            <!-- Étape 2 : Déverrouillage par code professeur -->
+            <div class="card">
+                <h2>🔐 Étape 2 : Déverrouiller ma Grille critériée, le Corrigé et le Bilan</h2>
+                <p style="font-size:0.86rem; color:#cbd5e1; margin-bottom:10px;">
+                    Entrez le <strong>code correction</strong> donné par le professeur pour afficher votre note sur 10 et le bilan du cours :
+                </p>
+                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                    <input type="password" id="unlock-code-input" placeholder="Code correction..." style="background:#09101d; border:1px solid #475569; color:#fff; padding:9px 12px; border-radius:6px;">
+                    <button class="action-btn blue" onclick="unlockCorrection()">🔓 Déverrouiller le corrigé</button>
+                    <span id="unlock-err" style="color:#f87171; font-size:0.82rem; display:none;">❌ Code incorrect. Demandez le code au professeur.</span>
+                </div>
+            </div>
+
+            <!-- Zone verrouillée -->
+            <div id="locked-correction-zone" style="display: none;">
+                <div class="card">
+                    <h2>📊 Mon Évaluation par Grille Critériée</h2>
+                    <div class="score-grid">
+                        <div class="score-box">
+                            <div>Score Global</div>
+                            <div class="big" id="disp-total">0 / 10</div>
+                        </div>
+                        <div class="score-box">
+                            <div>D4 - Modèles & Carte</div>
+                            <div class="big" id="disp-d4">0 / 4</div>
+                        </div>
+                        <div class="score-box">
+                            <div>D1 - Expliquer (Causes)</div>
+                            <div class="big" id="disp-d1">0 / 4</div>
+                        </div>
+                        <div class="score-box">
+                            <div>Maîtrise de la langue</div>
+                            <div class="big" id="disp-lang">0 / 2</div>
+                        </div>
+                    </div>
+
+                    <table class="criteria-table">
+                        <thead>
+                            <tr>
+                                <th>Activité & Compétence</th>
+                                <th>Critères de réussite attendus</th>
+                                <th>Statut</th>
+                                <th>Points</th>
+                            </tr>
+                        </thead>
+                        <tbody id="criteria-tbody"></tbody>
+                    </table>
+                </div>
+
+                <div class="card">
+                    <h2>✅ Correction complète & Notions essentielles à retenir</h2>
+                    <div style="background:rgba(56,189,248,0.08); border-left:4px solid var(--accent-blue); padding:16px; border-radius:8px; line-height:1.55; font-size:0.88rem;">
+                        <p><strong>1. Pourquoi les déchets s'accumulent-ils sur l'île Henderson ? (Courants de surface) :</strong><br>
+                        Le modèle du cristallisoir et la carte de l'océan montrent que les <strong>vents dominants</strong> (créés par les différences entre hautes et basses pressions) frottent à la surface de l'eau et entraînent les <strong>courants marins de surface</strong>. Ces courants forment d'immenses boucles circulaires (les <em>gyres océaniques</em>) qui transportent et piègent les déchets plastiques flottants sur des milliers de kilomètres jusqu'aux plages de l'île Henderson.</p>
+                        <br>
+                        <p><strong>2. Qu'est-ce qui provoque les courants marins profonds ? (Courants verticaux) :</strong><br>
+                        Le Soleil chauffe la Terre de manière inégale entre l'Équateur et les Pôles. Cette différence de <strong>température</strong> modifie la <strong>densité</strong> de l'eau :</p>
+                        <ul style="margin-left:20px; margin-top:6px;">
+                            <li>À l'Équateur, l'<strong>eau chaude</strong> est <strong>moins dense</strong> (plus légère) : elle reste et circule en surface vers les pôles (ex: <em>Gulf Stream</em>).</li>
+                            <li>Aux Pôles, l'<strong>eau froide</strong> est <strong>plus dense</strong> (plus lourde) : elle plonge en profondeur et repart vers l'Équateur en formant un courant froid profond.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    // =========================================================================
+    // CONFIGURATION PROFESSEUR (INVISIBLE POUR L'ÉLÈVE)
+    // =========================================================================
+    const DEFAULT_EAU_GAS_URL = "https://script.google.com/macros/s/AKfycby0QUI8Lc2y6gwRS3GrRWzJ9kYv6pAoaJyCbsVPvAl_ozOfsromNW9UJb3_nxx1vsxM/exec";
+    const _cfgEauUrl = window.SVT_CONFIG && window.SVT_CONFIG.GOOGLE_SHEET_WEBHOOK_URL;
+    const WEB_APP_URL = (_cfgEauUrl && _cfgEauUrl !== "COLLEZ_VOTRE_URL_APPS_SCRIPT_ICI") ? _cfgEauUrl : DEFAULT_EAU_GAS_URL;
+    const TEACHER_UNLOCK_CODES = Array.from(new Set(["2027", "SVT2027", "EAU2026", "SVT2026", ...((window.SVT_CONFIG && window.SVT_CONFIG.UNLOCK_CODES) || [])]));
+
+    function updateWordCount(textareaId, counterId) {
+        const text = document.getElementById(textareaId).value.trim();
+        const words = text ? text.split(/\s+/).length : 0;
+        document.getElementById(counterId).innerText = `${words} mot${words > 1 ? 's' : ''}`;
+    }
+
+    function normalizeText(str) {
+        return (str || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    }
+
+    // =========================================================================
+    // CARTE INTERACTIVE DES COURANTS DE L'ATLANTIQUE NORD (POINTS 1 À 6)
+    // =========================================================================
+    const oceanNodes = [
+        { id: 1, x: 92,  y: 295, expectedAngle: -52, label: "Gulf Stream (départ)" },
+        { id: 2, x: 378, y: 235, expectedAngle: -8,  label: "Gulf Stream (centre)" },
+        { id: 3, x: 605, y: 215, expectedAngle: -22, label: "Dérive Nord-Atlantique" },
+        { id: 4, x: 185, y: 205, expectedAngle: 118, label: "Courant du Labrador" },
+        { id: 5, x: 595, y: 325, expectedAngle: 112, label: "Courant des Canaries" },
+        { id: 6, x: 350, y: 435, expectedAngle: 180, label: "Courant Équatorial" }
+    ];
+    const userOceanArrows = {}; // id -> { dx, dy, angle, valid }
+    let activeOceanNode = null;
+    let oceanMapScore = 0;
+
+    function initOceanMap() {
+        const nodesLayer = document.getElementById('nodes-ocean');
+        const svg = document.getElementById('ocean-map-svg');
+        nodesLayer.innerHTML = "";
+
+        oceanNodes.forEach(n => {
+            const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            g.style.cursor = "pointer";
+            g.innerHTML = `
+                <circle cx="${n.x}" cy="${n.y}" r="14" fill="#0f172a" stroke="#fff" stroke-width="2.5"/>
+                <text x="${n.x}" y="${n.y + 4}" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">${n.id}</text>
+            `;
+            g.addEventListener("pointerdown", (e) => {
+                e.preventDefault();
+                activeOceanNode = n;
+            });
+            nodesLayer.appendChild(g);
+        });
+
+        svg.addEventListener("pointermove", (e) => {
+            if (!activeOceanNode) return;
+            const pt = getSVGPoint(svg, e);
+            const dx = pt.x - activeOceanNode.x;
+            const dy = pt.y - activeOceanNode.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist < 12) return;
+            const len = Math.min(65, Math.max(38, dist));
+            const angleRad = Math.atan2(dy, dx);
+            userOceanArrows[activeOceanNode.id] = {
+                x2: activeOceanNode.x + Math.cos(angleRad) * len,
+                y2: activeOceanNode.y + Math.sin(angleRad) * len,
+                angleDeg: angleRad * (180 / Math.PI),
+                status: 'user'
+            };
+            renderOceanArrows();
+        });
+
+        window.addEventListener("pointerup", () => { activeOceanNode = null; });
+    }
+
+    function getSVGPoint(svg, evt) {
+        const rect = svg.getBoundingClientRect();
+        return {
+            x: (evt.clientX - rect.left) * (850 / rect.width),
+            y: (evt.clientY - rect.top) * (470 / rect.height)
+        };
+    }
+
+    function renderOceanArrows() {
+        const layer = document.getElementById('user-arrows-ocean');
+        layer.innerHTML = "";
+        oceanNodes.forEach(n => {
+            const arr = userOceanArrows[n.id];
+            if (!arr) return;
+            let stroke = "#facc15", marker = "url(#arrowUser)";
+            if (arr.status === 'ok') { stroke = "#22c55e"; marker = "url(#arrowOk)"; }
+            if (arr.status === 'ko') { stroke = "#ef4444"; marker = "url(#arrowKo)"; }
+
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            line.setAttribute("x1", n.x);
+            line.setAttribute("y1", n.y);
+            line.setAttribute("x2", arr.x2);
+            line.setAttribute("y2", arr.y2);
+            line.setAttribute("stroke", stroke);
+            line.setAttribute("stroke-width", "4");
+            line.setAttribute("marker-end", marker);
+            layer.appendChild(line);
+        });
+    }
+
+    function angleDiff(a, b) {
+        let d = Math.abs(a - b) % 360;
+        return d > 180 ? 360 - d : d;
+    }
+
+    function verifyOceanMap() {
+        let okCount = 0;
+        oceanNodes.forEach(n => {
+            const arr = userOceanArrows[n.id];
+            if (!arr) return;
+            if (angleDiff(arr.angleDeg, n.expectedAngle) <= 48) {
+                arr.status = 'ok';
+                okCount++;
+            } else {
+                arr.status = 'ko';
+            }
+        });
+        oceanMapScore = okCount >= 4 ? 1 : (okCount >= 2 ? 0.5 : 0);
+        renderOceanArrows();
+        const fb = document.getElementById('ocean-map-feedback');
+        fb.style.color = okCount >= 4 ? "#4ade80" : "#f87171";
+        fb.innerText = `Résultat : ${okCount} / 6 flèches correctement orientées dans le sens des vents dominants.`;
+    }
+
+    function showOceanMapCorrection() {
+        oceanNodes.forEach(n => {
+            const rad = n.expectedAngle * (Math.PI / 180);
+            userOceanArrows[n.id] = {
+                x2: n.x + Math.cos(rad) * 55,
+                y2: n.y + Math.sin(rad) * 55,
+                angleDeg: n.expectedAngle,
+                status: 'ok'
+            };
+        });
+        renderOceanArrows();
+        document.getElementById('ocean-map-feedback').innerText = "Corrigé affiché : observez comment la boucle (gyre) tourne dans le sens des aiguilles d'une montre.";
+    }
+
+    function resetOceanMap() {
+        Object.keys(userOceanArrows).forEach(k => delete userOceanArrows[k]);
+        renderOceanArrows();
+        document.getElementById('ocean-map-feedback').innerText = "";
+    }
+
+    initOceanMap();
+
+    function escapeHTML(str) {
+        return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
+    const CONN_PATTERNS = [
+        { label: "car", re: /\bcar\b/g },
+        { label: "donc", re: /\bdonc\b/g },
+        { label: "parce que", re: /\bparce que\b/g },
+        { label: "ainsi", re: /\bainsi\b/g },
+        { label: "en effet", re: /\ben effet\b/g },
+        { label: "par conséquent", re: /\bpar consequent\b/g },
+        { label: "puisque", re: /\bpuisque\b/g },
+        { label: "grâce à", re: /\bgrace a\b/g },
+        { label: "alors", re: /\balors\b/g },
+        { label: "c'est pourquoi", re: /\bcest pourquoi\b|\bc'est pourquoi\b/g },
+        { label: "de ce fait", re: /\bde ce fait\b/g }
+    ];
+
+    function getMasteryBadge(scoreSur10) {
+        const pct = (scoreSur10 / 10) * 100;
+        if (pct >= 80) return { code: "TBM", label: "🟢 Très satisfaisant (TBM)", pill: "pill-tbm", color: "#22c55e" };
+        if (pct >= 55) return { code: "MS", label: "🔵 Satisfaisant (MS)", pill: "pill-ms", color: "#38bdf8" };
+        if (pct >= 35) return { code: "MF", label: "🟠 Fragile (MF)", pill: "pill-mf", color: "#f59e0b" };
+        return { code: "MI", label: "🔴 Insuffisant (MI)", pill: "pill-mi", color: "#ef4444" };
+    }
+
+    function highlightEauCopy(rawSections) {
+        const sciWords = ["haute pression", "basse pression", "moins dense", "plus dense", "densite", "courants marins", "courant de surface", "courant", "vents dominants", "alizes", "gyres", "gyre", "tourbillon", "henderson", "dechets", "plastiques", "eau chaude", "eau froide", "surface", "fond", "plonge", "monte", "atlantique"];
+        const connWords = ["par consequent", "cest pourquoi", "c'est pourquoi", "de ce fait", "parce que", "en effet", "grace a", "puisque", "ainsi", "alors", "donc", "car"];
+        const highlightOne = (raw) => {
+            if (!raw || !raw.trim()) return '<em style="color:#64748b">(aucune réponse saisie)</em>';
+            return raw.split(/(\s+|[.,;:!?()'’"\-])/).map(tok => {
+                const ct = normalizeText(tok).trim();
+                if (!ct) return escapeHTML(tok);
+                if (connWords.some(c => normalizeText(c) === ct)) return `<span class="hl-conn">${escapeHTML(tok)}</span>`;
+                if (sciWords.some(s => s.split(/\s+/).includes(ct) && ct.length > 2)) return `<span class="hl-sci">${escapeHTML(tok)}</span>`;
+                return escapeHTML(tok);
+            }).join('');
+        };
+        return rawSections.map(s => `<div class="copy-block" style="margin-top:8px;"><div style="font-size:0.74rem;color:#94a3b8;font-weight:700;margin-bottom:4px;">${escapeHTML(s.label)}</div><div>${highlightOne(s.text)}</div></div>`).join('');
+    }
+
+    // =========================================================================
+    // MOTEUR D'ÉVALUATION CRITÉRIÉ HORS-LLM (BARÈME / 10 PTS)
+    // =========================================================================
+    function evaluateStudentWork() {
+        const rawQ1 = document.getElementById('ans-q1').value.trim();
+        const rawQ2 = document.getElementById('ans-q2').value.trim();
+        const rawQ3 = document.getElementById('ans-q3').value.trim();
+        const rawProb = document.getElementById('ans-prob').value.trim();
+        const rawHyp = document.getElementById('ans-hyp').value.trim();
+
+        const nQ0 = normalizeText(rawProb + " " + rawHyp);
+        const nQ1 = normalizeText(rawQ1);
+        const nQ2 = normalizeText(rawQ2);
+        const nQ3 = normalizeText(rawQ3 + " " + rawHyp);
+        const allClean = [nQ0, nQ1, nQ2, normalizeText(rawQ3)].join(" ");
+        const allRaw = [rawProb, rawHyp, rawQ1, rawQ2, rawQ3].join(" ");
+
+        // --- Q1 : Courants horizontaux (Modèle 1) ---
+        const q1_c1 = /(paille|souffle|air)/.test(nQ1) && /(colorant|eau|deplace|droite|fond|surface)/.test(nQ1);
+        const q1_c2 = /(haute pression|basse pression|pression)/.test(nQ1);
+        const q1_c3 = /(vent|vents dominants|alize|ouest)/.test(nQ1) && /(courant|surface|ocean|entraine|pousse)/.test(nQ1);
+
+        // --- Q2 : Courants verticaux (Modèle 2) ---
+        const q2_c1 = /(chaud|rouge)/.test(nQ2) && /(haut|superieur|monte|surface)/.test(nQ2);
+        const q2_c2 = /(froid|bleu)/.test(nQ2) && /(bas|inferieur|descend|fond|plonge)/.test(nQ2);
+        const q2_c3 = /(densite|dense)/.test(nQ2) && /(moins dense|plus dense|leger|lourd)/.test(nQ2);
+
+        // --- Onglet 4 & 1 : Carte interactive (D4 : 1 pt) + Retour Île Henderson (D1 : 1 pt) ---
+        verifyOceanMap();
+        const q3_c1 = /(courant|vent|gyre|boucle)/.test(nQ3) && /(dechet|plastique|henderson|ile|transporte|accumul)/.test(nQ3);
+
+        // --- Langue (D1.1) ---
+        const totalWords = allClean.split(/\s+/).filter(Boolean).length;
+        const sentenceCount = allRaw.split(/[.!?]+/).map(x => x.trim()).filter(Boolean).length;
+        const nQ3Pure = normalizeText(rawQ3);
+        const connectorsFound = CONN_PATTERNS.filter(c => { c.re.lastIndex = 0; return c.re.test(nQ3Pure); }).map(c => c.label);
+        const q_lang_struct = totalWords >= 35 && /[.!?]/.test(rawQ1 + rawQ2 + rawQ3);
+        const q_lang_connecteurs = /\b(car|donc|parce que|ainsi|en effet|par consequent|puisque|grace a|alors|cest pourquoi|de ce fait)\b/.test(nQ3Pure);
+
+        const scoreD4 = Math.round(((q1_c1 ? 1 : 0) + (q1_c2 ? 0.5 : 0) + (q2_c1 ? 0.75 : 0) + (q2_c2 ? 0.75 : 0) + oceanMapScore) * 100) / 100;
+        const scoreD1 = Math.round(((q1_c3 ? 1.5 : 0) + (q2_c3 ? 1.5 : 0) + (q3_c1 ? 1.0 : 0)) * 100) / 100;
+        const scoreLangue = (q_lang_struct ? 1 : 0) + (q_lang_connecteurs ? 1 : 0);
+        const scoreTotal = Math.min(10, Math.round((scoreD4 + scoreD1 + scoreLangue) * 100) / 100);
+        const scoreSur5 = Math.round((scoreTotal / 2) * 100) / 100;
+        const scoreSur20 = Math.round(scoreTotal * 20) / 10;
+        const mastery = getMasteryBadge(scoreTotal);
+
+        const criteriaRows = [
+            { code: "EAU_MOD1", comp: "D4", q: "Modèle 1 (D4)", desc: "Décrire l'action du souffle de la paille sur le déplacement de l'eau et du colorant", ok: q1_c1, pts: q1_c1 ? "1 / 1" : "0 / 1", conseil: "À l'étape 2, décris comment le souffle de la paille déplace l'eau de surface et le colorant." },
+            { code: "EAU_PRES", comp: "D4", q: "Modèle 1 (D4)", desc: "Mentionner les zones de haute pression et de basse pression", ok: q1_c2, pts: q1_c2 ? "0.5 / 0.5" : "0 / 0.5", conseil: "Cite les zones de haute et de basse pression créées à la surface par le souffle." },
+            { code: "EAU_VENT", comp: "D1", q: "Modèle 1 (D1)", desc: "Expliquer que les vents dominants entraînent les courants marins de surface", ok: q1_c3, pts: q1_c3 ? "1.5 / 1.5" : "0 / 1.5", conseil: "Relie ce modèle aux « vents dominants » qui entraînent les « courants marins de surface »." },
+            { code: "EAU_MOD2", comp: "D4", q: "Modèle 2 (D4)", desc: "Décrire le passage de l'eau chaude (rouge) en haut et de l'eau froide (bleue) en bas", ok: (q2_c1 && q2_c2), pts: ((q2_c1 ? 0.75 : 0) + (q2_c2 ? 0.75 : 0)) + " / 1.5", conseil: "À l'étape 3, décris à la fois la position finale de l'eau chaude (rouge) et celle de l'eau froide (bleue)." },
+            { code: "EAU_DENS", comp: "D1", q: "Modèle 2 (D1)", desc: "Expliquer par la différence de densité (eau chaude moins dense / eau froide plus dense)", ok: q2_c3, pts: q2_c3 ? "1.5 / 1.5" : "0 / 1.5", conseil: "Utilise le vocabulaire scientifique (« moins dense » / « plus dense ») pour justifier ces mouvements verticaux." },
+            { code: "EAU_MAP", comp: "D4", q: "Réel (D4)", desc: "Orienter correctement au moins 4 flèches de courants sur la carte de l'Atlantique", ok: oceanMapScore >= 1, pts: oceanMapScore + " / 1", conseil: "À l'onglet 4, trace au moins 4 flèches de courants correctement orientées sur la carte interactive." },
+            { code: "EAU_REAL", comp: "D1", q: "Réel (D1)", desc: "Expliquer l'accumulation des déchets sur l'île Henderson par les courants marins", ok: q3_c1, pts: q3_c1 ? "1 / 1" : "0 / 1", conseil: "Dans Q3, explique comment les boucles de courants (« gyres océaniques ») piègent et accumulent les plastiques jusqu'à Henderson." },
+            { code: "LANG1", comp: "LANG", q: "Langue (D1.1)", desc: "Phrases construites et ponctuées (majuscules, points)", ok: q_lang_struct, pts: q_lang_struct ? "1 / 1" : "0 / 1", conseil: "Développe davantage tes explications avec des phrases ponctuées (40+ mots au total)." },
+            { code: "LANG2", comp: "LANG", q: "Langue (D1.1)", desc: "Utiliser des connecteurs logiques (car, donc, ainsi...) dans l'explication du réel", ok: q_lang_connecteurs, pts: q_lang_connecteurs ? "1 / 1" : "0 / 1", conseil: "Utilise au moins un connecteur logique (« car », « parce que », « donc », « ainsi ») dans Q3." }
+        ];
+
+        const erreursDetectees = [];
+        const conseilsProgression = [];
+        if (/eau chaude[^.?!]{0,35}(plus dense|descend|fond|plonge)/.test(allClean) || /rouge[^.?!]{0,35}(descend|fond|bas)/.test(allClean)) {
+            erreursDetectees.push("Confusion thermique (Modèle 2) : vérifie à quel niveau s'installe l'eau chaude rouge après ouverture des vannes.");
+        }
+        if (/eau froide[^.?!]{0,35}(moins dense|monte|surface|haut)/.test(allClean) || /bleu[^.?!]{0,35}(monte|haut)/.test(allClean)) {
+            erreursDetectees.push("Confusion sur l'eau froide : observe pourquoi l'eau froide bleue plonge ou monte dans les colonnes.");
+        }
+        if (oceanMapScore < 1) {
+            erreursDetectees.push(`Carte interactive incomplète (${oceanMapScore}/1 pt) : vérifie le sens de rotation de la boucle des courants dans l'Atlantique Nord.`);
+        }
+        criteriaRows.forEach(c => {
+            if (!c.ok) {
+                erreursDetectees.push(`Critère non validé [${c.q}] : ${c.desc}`);
+                if (c.conseil) conseilsProgression.push(c.conseil);
+            }
+        });
+        const failedD4 = criteriaRows.filter(c => !c.ok && c.comp === 'D4').length;
+        const failedD1 = criteriaRows.filter(c => !c.ok && c.comp === 'D1').length;
+        const failedLang = criteriaRows.filter(c => !c.ok && c.comp === 'LANG').length;
+        let atelierRemediation = "Défi d'approfondissement : excellente maîtrise, prêt(e) pour relier circulation de surface et circulation profonde.";
+        if (erreursDetectees.length > 0) {
+            if (failedD4 >= failedD1 && failedD4 > 0) atelierRemediation = "Atelier A (Démarche & Modèles - D4) : reprendre la manipulation 3D du bac à eau, des colonnes chaud/froid et le tracé des flèches.";
+            else if (failedD1 > 0) atelierRemediation = "Atelier B (Explication physique - D1) : relier vents dominants -> courants/gyres -> Henderson et température -> densité.";
+            else if (failedLang > 0) atelierRemediation = "Atelier C (Rédaction scientifique - D1.1) : relier cause et conséquence avec des connecteurs (car, donc, ainsi).";
+        }
+        if (!conseilsProgression.length) conseilsProgression.push("Bravo ! Tous les critères sont validés.");
+
+        document.getElementById('disp-total').innerText = `${scoreTotal} / 10`;
+        document.getElementById('disp-d4').innerText = `${scoreD4} / 4`;
+        document.getElementById('disp-d1').innerText = `${scoreD1} / 4`;
+        document.getElementById('disp-lang').innerText = `${scoreLangue} / 2`;
+
+        const tbody = document.getElementById('criteria-tbody');
+        tbody.innerHTML = "";
+        criteriaRows.forEach(r => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${r.q}</strong></td>
+                <td>${r.desc}</td>
+                <td class="${r.ok ? 'crit-ok' : 'crit-ko'}">${r.ok ? '✔ Validé' : '✖ À retravailler'}</td>
+                <td>${r.pts}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        const q1Criteria = [criteriaRows[0], criteriaRows[1], criteriaRows[2], criteriaRows[5]];
+        const q2Criteria = [criteriaRows[3], criteriaRows[4], criteriaRows[6], criteriaRows[7], criteriaRows[8]];
+        const q1Score = Math.round(((q1_c1 ? 1 : 0) + (q1_c2 ? 0.5 : 0) + (q1_c3 ? 1.5 : 0) + oceanMapScore) * 100) / 100;
+        const q2Score = Math.round(((q2_c1 ? 0.75 : 0) + (q2_c2 ? 0.75 : 0) + (q2_c3 ? 1.5 : 0) + (q3_c1 ? 1 : 0) + scoreLangue) * 100) / 100;
+
+        return {
+            activite: "Dynamique des masses d'eau (Île Henderson)",
+            theme: "eau",
+            nom: document.getElementById('st-nom').value.trim(),
+            prenom: document.getElementById('st-prenom').value.trim(),
+            classe: document.getElementById('st-classe').value,
+            scoreTotal, scoreSur5, scoreSur20,
+            niveauMaitrise: mastery.code,
+            scoreD4,
+            scoreD1,
+            scoreLangue,
+            wordCount: totalWords,
+            sentenceCount,
+            connectorsFound,
+            critList: criteriaRows,
+            erreursDetectees,
+            conseilsProgression: Array.from(new Set(conseilsProgression)),
+            atelierRemediation,
+            highlightedCopyHTML: highlightEauCopy([
+                { label: "1. Situation déclenchante (Problème / Hypothèse)", text: `${rawProb}\n${rawHyp}`.trim() },
+                { label: "2. Modèle 1 (Courants de surface)", text: rawQ1 },
+                { label: "3. Modèle 2 (Colonnes chaud/froid)", text: rawQ2 },
+                { label: "4. Retour au réel (Île Henderson)", text: rawQ3 }
+            ]),
+            q1: {
+                intitule: "Courants de surface & Carte Atlantique",
+                reponse: `[Problème/Hypothèse] ${rawProb} / ${rawHyp} || [Q1] ${rawQ1}`,
+                score: q1Score,
+                valides: q1Criteria.filter(x => x.ok).map(x => x.desc),
+                manquants: q1Criteria.filter(x => !x.ok).map(x => x.desc)
+            },
+            q2: {
+                intitule: "Courants verticaux & Synthèse Henderson",
+                reponse: `[Q2] ${rawQ2} || [Synthèse Henderson] ${rawQ3}`,
+                score: q2Score,
+                valides: q2Criteria.filter(x => x.ok).map(x => x.desc),
+                manquants: q2Criteria.filter(x => !x.ok).map(x => x.desc)
+            }
+        };
+    }
+
+    const eauAttemptHistory = {};
+    function renderStudentPostSendPanel(result) {
+        const panel = document.getElementById('student-post-send-panel');
+        if (!panel) return;
+        const key = `svt_eau_attempt_${normalizeText(result.nom)}_${normalizeText(result.prenom)}_${normalizeText(result.classe)}`;
+        let prev = eauAttemptHistory[key];
+        if (!prev) {
+            try { const s = localStorage.getItem(key); if (s) prev = JSON.parse(s); } catch (e) {}
+        }
+        const attemptNum = prev ? prev.attemptNum + 1 : 1;
+        const delta = prev ? Math.round((result.scoreTotal - prev.scoreTotal) * 100) / 100 : null;
+        eauAttemptHistory[key] = { attemptNum, scoreTotal: result.scoreTotal };
+        try { localStorage.setItem(key, JSON.stringify(eauAttemptHistory[key])); } catch (e) {}
+
+        const mastery = getMasteryBadge(result.scoreTotal);
+        const pct = Math.min(100, Math.round((result.scoreTotal / 10) * 100));
+        const deltaBadge = delta !== null
+            ? `<span class="mastery-pill pill-tbm">${delta >= 0 ? '+' : ''}${delta} pt depuis tentative ${attemptNum - 1}</span>`
+            : `<span class="mastery-pill" style="background:#1e293b;color:#cbd5e1;border:1px solid #475569;">Tentative ${attemptNum}</span>`;
+
+        const errHtml = result.erreursDetectees.length
+            ? `<ul>${result.erreursDetectees.map(e => `<li>${escapeHTML(e)}</li>`).join('')}</ul>`
+            : `<p>✅ Aucune confusion ni oubli détecté !</p>`;
+        const consHtml = `<ul>${result.conseilsProgression.map(c => `<li>${escapeHTML(c)}</li>`).join('')}</ul>`;
+
+        const rowsHtml = result.critList.map(r => `
+            <tr>
+                <td><strong>${escapeHTML(r.q)}</strong></td>
+                <td>${escapeHTML(r.desc)}</td>
+                <td class="${r.ok ? 'crit-ok' : 'crit-ko'}">${r.ok ? '✔ Validé' : '✖ À retravailler'}</td>
+                <td>${escapeHTML(r.pts)}</td>
+            </tr>
+        `).join('');
+
+        panel.innerHTML = `
+            <div class="card post-send-card">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+                    <h2 style="margin:0;">🎯 Ton Bilan Immédiat (avant déverrouillage du corrigé type)</h2>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        ${deltaBadge}
+                        <span class="mastery-pill ${mastery.pill}">${mastery.label}</span>
+                    </div>
+                </div>
+                <div style="font-size:0.8rem;color:#94a3b8;">Score estimé : <strong style="color:#fff;">${result.scoreTotal} / 10</strong> (${result.scoreSur20} / 20 · ${pct}%)</div>
+                <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${mastery.color};"></div></div>
+
+                <div class="score-grid">
+                    <div class="score-box"><div>Score Global</div><div class="big">${result.scoreTotal} / 10</div><div style="font-size:0.72rem;color:#94a3b8;">${result.scoreSur5} / 5</div></div>
+                    <div class="score-box"><div>D4 — Modèles/Carte</div><div class="big">${result.scoreD4} / 4</div></div>
+                    <div class="score-box"><div>D1 — Expliquer</div><div class="big">${result.scoreD1} / 4</div></div>
+                    <div class="score-box"><div>Langue (D1.1)</div><div class="big">${result.scoreLangue} / 2</div><div style="font-size:0.72rem;color:#94a3b8;">${result.wordCount} mots · ${result.connectorsFound.length} conn.</div></div>
+                </div>
+
+                <div class="diag-box err">
+                    <strong>⚠️ Erreurs, confusions ou oublis repérés :</strong>
+                    ${errHtml}
+                </div>
+
+                <div class="diag-box rem">
+                    <strong>💡 Comment progresser :</strong>
+                    ${consHtml}
+                    <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(56,189,248,0.25);">
+                        <strong>🛠️ Remédiation conseillée en classe :</strong> ${escapeHTML(result.atelierRemediation)}
+                    </div>
+                </div>
+
+                <table class="criteria-table">
+                    <thead><tr><th>Activité</th><th>Critère de réussite évalué</th><th>Statut</th><th>Points</th></tr></thead>
+                    <tbody>${rowsHtml}</tbody>
+                </table>
+
+                <div style="margin-top:14px;">
+                    <div style="font-size:0.84rem;font-weight:700;color:#e2e8f0;">🔍 Ta copie analysée (<span class="hl-sci">mots scientifiques</span> · <span class="hl-conn">connecteurs logiques</span>)</div>
+                    ${result.highlightedCopyHTML}
+                </div>
+
+                <div style="margin-top:14px;display:flex;justify-content:flex-end;">
+                    <button type="button" class="action-btn" style="max-width:340px;" onclick="switchMode('real')">✏️ Améliorer mes réponses et renvoyer au professeur</button>
+                </div>
+            </div>
+        `;
+        panel.style.display = "block";
+        panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    // =========================================================================
+    // ENVOI TRANSPARENT AU PROFESSEUR (SANS CHAMP URL POUR L'ÉLÈVE)
+    // =========================================================================
+    async function submitToGoogleSheet() {
+        const result = evaluateStudentWork();
+        const statusBanner = document.getElementById('send-status');
+
+        if (!result.nom || !result.prenom || !result.classe) {
+            statusBanner.className = "status-banner error";
+            statusBanner.style.display = "block";
+            statusBanner.innerText = "⚠️ N'oublie pas de renseigner ton NOM, ton Prénom et ta Classe tout en haut de la page avant d'envoyer !";
+            return;
+        }
+        if (!document.getElementById('ans-q1').value.trim() || !document.getElementById('ans-q2').value.trim()) {
+            statusBanner.className = "status-banner error";
+            statusBanner.style.display = "block";
+            statusBanner.innerText = "⚠️ Rédige d'abord tes réponses aux modèles 1 et 2 avant d'envoyer ton travail.";
+            return;
+        }
+
+        statusBanner.className = "status-banner success";
+        statusBanner.style.display = "block";
+        statusBanner.innerText = "⏳ Envoi de tes réponses au professeur en cours...";
+
+        try {
+            if (WEB_APP_URL && WEB_APP_URL !== "COLLEZ_VOTRE_URL_APPS_SCRIPT_ICI") {
+                await fetch(WEB_APP_URL, {
+                    method: "POST",
+                    mode: "no-cors",
+                    headers: { "Content-Type": "text/plain;charset=utf-8" },
+                    body: JSON.stringify(result)
+                });
+                statusBanner.innerHTML = `✅ <strong>Travail envoyé au professeur !</strong> (${escapeHTML(result.prenom)} ${escapeHTML(result.nom)} - ${escapeHTML(result.classe)}).<br>Découvre ci-dessous ton score, tes erreurs et les pistes pour progresser (le corrigé type complet reste verrouillé jusqu'au code professeur).`;
+            } else {
+                localStorage.setItem("svt_eau_copie_" + result.nom, JSON.stringify(result));
+                statusBanner.innerHTML = `✅ <strong>Travail validé et enregistré pour ${escapeHTML(result.prenom)} ${escapeHTML(result.nom)} (${escapeHTML(result.classe)}) !</strong><br>Découvre ton score et tes conseils ci-dessous (mode hors-ligne ; le corrigé type reste verrouillé jusqu'au code professeur).`;
+            }
+            renderStudentPostSendPanel(result);
+        } catch (err) {
+            statusBanner.className = "status-banner warn";
+            statusBanner.innerHTML = "⚠️ Erreur de connexion lors de l'envoi, mais ton bilan diagnostique est affiché ci-dessous.";
+            renderStudentPostSendPanel(result);
+        }
+    }
+
+    function unlockCorrection() {
+        const code = document.getElementById('unlock-code-input').value.trim().toUpperCase();
+        const errSpan = document.getElementById('unlock-err');
+        if (TEACHER_UNLOCK_CODES.includes(code)) {
+            errSpan.style.display = "none";
+            evaluateStudentWork();
+            document.getElementById('locked-correction-zone').style.display = "block";
+        } else {
+            errSpan.style.display = "inline";
+        }
+    }
+
+    // =========================================================================
+    // SCÈNE 3D THREE.JS (ONGLETS 2 & 3)
+    // =========================================================================
+    const container = document.getElementById('canvas-container');
+    const labelsContainer = document.getElementById('labels-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b1324);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / (window.innerHeight - 60), 0.1, 1000);
+    camera.position.set(0, 3.8, 14.5);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight - 60);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(10, 15, 10);
+    scene.add(dirLight);
+
+    const grid = new THREE.GridHelper(20, 20, 0x334155, 0x1e293b);
+    grid.position.y = -3.01;
+    scene.add(grid);
+
+    let currentMode = 'trigger';
+    const groupHorizontal = new THREE.Group();
+    const groupVertical = new THREE.Group();
+    scene.add(groupHorizontal);
+    scene.add(groupVertical);
+    groupHorizontal.visible = false;
+    groupVertical.visible = false;
+
+    const labels = [];
+    function createLabel(text, pos3D, mode, cssClass = '') {
+        const div = document.createElement('div');
+        div.className = 'label-3d ' + cssClass;
+        div.innerHTML = text;
+        labelsContainer.appendChild(div);
+        const obj = { element: div, pos: pos3D.clone(), mode, visible: true };
+        labels.push(obj);
+        return obj;
+    }
+
+    function updateLabels() {
+        const wHalf = renderer.domElement.clientWidth / 2;
+        const hHalf = renderer.domElement.clientHeight / 2;
+        labels.forEach(lbl => {
+            if (lbl.mode !== currentMode || !lbl.visible) {
+                lbl.element.style.display = 'none';
+                return;
+            }
+            const v = lbl.pos.clone().project(camera);
+            if (v.z > 1) { lbl.element.style.display = 'none'; return; }
+            lbl.element.style.display = 'block';
+            lbl.element.style.left = `${(v.x * wHalf) + wHalf}px`;
+            lbl.element.style.top = `${-(v.y * hHalf) + hHalf}px`;
+        });
+    }
+
+    // --- MODÈLE 1 : CRISTALLISOIR + PAILLE + COLORANT ---
+    let windIntensity = 0;
+    const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.22, roughness: 0.1, depthWrite: false });
+    const tankGeo = new THREE.BoxGeometry(7.6, 3.0, 2.8);
+    const tankMesh = new THREE.Mesh(tankGeo, glassMat);
+    tankMesh.position.set(-0.4, -1.4, 0);
+    groupHorizontal.add(tankMesh);
+    tankMesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(tankGeo), new THREE.LineBasicMaterial({ color: 0x94a3b8 })));
+
+    const waterMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(7.5, 2.1, 2.7),
+        new THREE.MeshPhongMaterial({ color: 0x0ea5e9, transparent: true, opacity: 0.35, depthWrite: false })
+    );
+    waterMesh.position.set(-0.4, -1.85, 0);
+    groupHorizontal.add(waterMesh);
+
+    const strawMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.17, 0.17, 2.5, 20),
+        new THREE.MeshPhongMaterial({ color: 0xf8fafc })
+    );
+    strawMesh.position.set(-3.7, 0.85, 0);
+    strawMesh.rotation.z = Math.PI / 3;
+    groupHorizontal.add(strawMesh);
+
+    const dropMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.3, 20, 20),
+        new THREE.MeshPhongMaterial({ color: 0x10b981, emissive: 0x047857, emissiveIntensity: 0.4 })
+    );
+    dropMesh.position.set(-3.4, -2.5, 0);
+    groupHorizontal.add(dropMesh);
+
+    const dyeParticles = [];
+    const dyeGeo = new THREE.SphereGeometry(0.085, 8, 8);
+    const dyeMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
+    for (let i = 0; i < 220; i++) {
+        const p = new THREE.Mesh(dyeGeo, dyeMat);
+        p.userData = { t: Math.random(), zOffset: (Math.random() - 0.5) * 1.1, yJitter: (Math.random() - 0.5) * 0.14 };
+        p.visible = false;
+        groupHorizontal.add(p);
+        dyeParticles.push(p);
+    }
+
+    createLabel("Paille", new THREE.Vector3(-4.5, 1.7, 0), 'horizontal');
+    createLabel("Cristallisoir", new THREE.Vector3(-4.4, -0.3, 1.4), 'horizontal');
+    createLabel("Colorant", new THREE.Vector3(-3.4, -2.6, 1.1), 'horizontal');
+    const lblHighP = createLabel("Haute pression", new THREE.Vector3(-2.0, 0.35, 0), 'horizontal', 'cold');
+    const lblLowP = createLabel("Basse pression", new THREE.Vector3(2.6, 0.35, 0), 'horizontal', 'hot');
+    lblHighP.visible = false;
+    lblLowP.visible = false;
+
+    function updateWind(val) {
+        windIntensity = parseFloat(val) / 100;
+        document.getElementById('wind-val').innerText = val;
+        if (windIntensity > 0.05) {
+            lblHighP.visible = true;
+            lblLowP.visible = true;
+        } else {
+            resetHorizontal();
+        }
+    }
+
+    function resetHorizontal() {
+        windIntensity = 0;
+        document.getElementById('wind-slider').value = 0;
+        document.getElementById('wind-val').innerText = 0;
+        lblHighP.visible = false;
+        lblLowP.visible = false;
+        dyeParticles.forEach(p => p.visible = false);
+    }
+
+    // --- MODÈLE 2 : COLONNES EAU CHAUDE / EAU FROIDE ---
+    let verticalExchangeActive = false;
+    let exchangeProgress = 0;
+    const colDist = 2.6;
+    const colGeo = new THREE.CylinderGeometry(0.82, 0.82, 5.0, 32);
+
+    const leftGlass = new THREE.Mesh(colGeo, glassMat);
+    leftGlass.position.set(-colDist - 0.4, -0.4, 0);
+    groupVertical.add(leftGlass);
+
+    const rightGlass = new THREE.Mesh(colGeo, glassMat);
+    rightGlass.position.set(colDist - 0.4, -0.4, 0);
+    groupVertical.add(rightGlass);
+
+    const tubeGeo = new THREE.CylinderGeometry(0.26, 0.26, colDist * 2, 24);
+    tubeGeo.rotateZ(Math.PI / 2);
+    const topTube = new THREE.Mesh(tubeGeo, glassMat);
+    topTube.position.set(-0.4, 1.0, 0);
+    groupVertical.add(topTube);
+
+    const botTube = new THREE.Mesh(tubeGeo, glassMat);
+    botTube.position.set(-0.4, -1.8, 0);
+    groupVertical.add(botTube);
+
+    const halfWaterGeo = new THREE.CylinderGeometry(0.76, 0.76, 2.3, 32);
+    const hotMat = new THREE.MeshPhongMaterial({ color: 0xef4444, transparent: true, opacity: 0.65 });
+    const coldMat = new THREE.MeshPhongMaterial({ color: 0x3b82f6, transparent: true, opacity: 0.65 });
+
+    const leftTopWater = new THREE.Mesh(halfWaterGeo, hotMat.clone());
+    leftTopWater.position.set(-colDist - 0.4, 0.75, 0);
+    groupVertical.add(leftTopWater);
+
+    const leftBotWater = new THREE.Mesh(halfWaterGeo, hotMat.clone());
+    leftBotWater.position.set(-colDist - 0.4, -1.55, 0);
+    groupVertical.add(leftBotWater);
+
+    const rightTopWater = new THREE.Mesh(halfWaterGeo, coldMat.clone());
+    rightTopWater.position.set(colDist - 0.4, 0.75, 0);
+    groupVertical.add(rightTopWater);
+
+    const rightBotWater = new THREE.Mesh(halfWaterGeo, coldMat.clone());
+    rightBotWater.position.set(colDist - 0.4, -1.55, 0);
+    groupVertical.add(rightBotWater);
+
+    const hotFlowParticles = [];
+    const coldFlowParticles = [];
+    const pGeo = new THREE.SphereGeometry(0.095, 10, 10);
+    const hotPMat = new THREE.MeshBasicMaterial({ color: 0xf87171 });
+    const coldPMat = new THREE.MeshBasicMaterial({ color: 0x60a5fa });
+
+    for (let i = 0; i < 80; i++) {
+        const hp = new THREE.Mesh(pGeo, hotPMat);
+        hp.userData = { t: Math.random(), rOffset: (Math.random() - 0.5) * 0.22 };
+        hp.visible = false;
+        groupVertical.add(hp);
+        hotFlowParticles.push(hp);
+
+        const cp = new THREE.Mesh(pGeo, coldPMat);
+        cp.userData = { t: Math.random(), rOffset: (Math.random() - 0.5) * 0.22 };
+        cp.visible = false;
+        groupVertical.add(cp);
+        coldFlowParticles.push(cp);
+    }
+
+    createLabel("Eau chaude", new THREE.Vector3(-colDist - 1.9, -0.4, 0), 'vertical', 'hot');
+    createLabel("Eau froide", new THREE.Vector3(colDist + 1.0, -0.4, 0), 'vertical', 'cold');
+    const lblTopFlow = createLabel("➔ Eau chaude (moins dense)", new THREE.Vector3(-0.4, 1.7, 0), 'vertical', 'hot');
+    const lblBotFlow = createLabel("⬅ Eau froide (plus dense)", new THREE.Vector3(-0.4, -2.5, 0), 'vertical', 'cold');
+    lblTopFlow.visible = false;
+    lblBotFlow.visible = false;
+
+    function startVerticalExchange() {
+        verticalExchangeActive = true;
+        lblTopFlow.visible = true;
+        lblBotFlow.visible = true;
+    }
+
+    function resetVertical() {
+        verticalExchangeActive = false;
+        exchangeProgress = 0;
+        lblTopFlow.visible = false;
+        lblBotFlow.visible = false;
+        leftBotWater.material.color.setHex(0xef4444);
+        rightTopWater.material.color.setHex(0x3b82f6);
+        hotFlowParticles.forEach(p => p.visible = false);
+        coldFlowParticles.forEach(p => p.visible = false);
+    }
+
+    function switchMode(mode) {
+        currentMode = mode;
+        const modes = ['trigger', 'horizontal', 'vertical', 'real', 'bilan'];
+        const btns = document.querySelectorAll('.tab-btn');
+        modes.forEach((m, idx) => btns[idx].classList.toggle('active', mode === m));
+
+        document.getElementById('view-trigger').style.display = (mode === 'trigger') ? 'block' : 'none';
+        document.getElementById('panel-horizontal').style.display = (mode === 'horizontal') ? 'block' : 'none';
+        document.getElementById('qpanel-horizontal').style.display = (mode === 'horizontal') ? 'block' : 'none';
+        document.getElementById('panel-vertical').style.display = (mode === 'vertical') ? 'block' : 'none';
+        document.getElementById('qpanel-vertical').style.display = (mode === 'vertical') ? 'block' : 'none';
+        document.getElementById('view-real').style.display = (mode === 'real') ? 'block' : 'none';
+        document.getElementById('view-bilan').style.display = (mode === 'bilan') ? 'block' : 'none';
+
+        groupHorizontal.visible = (mode === 'horizontal');
+        groupVertical.visible = (mode === 'vertical');
+    }
+
+    const colorHot = new THREE.Color(0xef4444);
+    const colorCold = new THREE.Color(0x3b82f6);
+
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+
+        if (currentMode === 'horizontal' && windIntensity > 0.05) {
+            const speed = 0.0045 * windIntensity;
+            dyeParticles.forEach(p => {
+                p.visible = true;
+                p.userData.t = (p.userData.t + speed) % 1;
+                const t = p.userData.t;
+                let x, y;
+                if (t < 0.45) {
+                    x = -3.4 + (t / 0.45) * 6.0;
+                    y = -2.5 + p.userData.yJitter;
+                } else if (t < 0.55) {
+                    const k = (t - 0.45) / 0.10;
+                    x = 2.6 + Math.sin(k * Math.PI) * 0.25;
+                    y = -2.5 + k * 0.5;
+                } else {
+                    x = 2.6 - ((t - 0.55) / 0.45) * 5.6;
+                    y = -2.0 + p.userData.yJitter;
+                }
+                p.position.set(x, y, p.userData.zOffset);
+            });
+        }
+
+        if (currentMode === 'vertical' && verticalExchangeActive) {
+            if (exchangeProgress < 1) {
+                exchangeProgress = Math.min(1, exchangeProgress + 0.003);
+                leftBotWater.material.color.lerpColors(colorHot, colorCold, exchangeProgress);
+                rightTopWater.material.color.lerpColors(colorCold, colorHot, exchangeProgress);
+            }
+            hotFlowParticles.forEach(hp => {
+                hp.visible = true;
+                hp.userData.t = (hp.userData.t + 0.006) % 1;
+                const t = hp.userData.t;
+                hp.position.set(-colDist - 0.4 + t * (colDist * 2), 1.0 + hp.userData.rOffset * 0.5, hp.userData.rOffset);
+            });
+            coldFlowParticles.forEach(cp => {
+                cp.visible = true;
+                cp.userData.t = (cp.userData.t + 0.006) % 1;
+                const t = cp.userData.t;
+                cp.position.set(colDist - 0.4 - t * (colDist * 2), -1.8 + cp.userData.rOffset * 0.5, cp.userData.rOffset);
+            });
+        }
+
+        updateLabels();
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / (window.innerHeight - 60);
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight - 60);
+    });
+
+    animate();
+</script>
+</body>
+</html>
